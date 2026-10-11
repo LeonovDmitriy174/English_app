@@ -5,6 +5,7 @@ import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
 import { renderReview } from "./views/review.js";
+import { renderNotes } from "./views/notes.js";
 
 const root = document.getElementById("app");
 const stage = h("div");
@@ -12,6 +13,7 @@ const tabs = [
   ["library", "Книги", "book"],
   ["dict", "Словарь", "bookmark"],
   ["review", "Повторение", "repeat"],
+  ["notes", "Заметки", "flag"],
 ];
 const tabbar = h("nav", { class: "tabbar", "aria-label": "Разделы" });
 root.append(stage, tabbar);
@@ -53,6 +55,9 @@ function route() {
   } else if (name === "review") {
     current = "review";
     cleanup = renderReview(stage);
+  } else if (name === "notes") {
+    current = "notes";
+    cleanup = renderNotes(stage);
   } else {
     current = "library";
     cleanup = renderLibrary(stage);

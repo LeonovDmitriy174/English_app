@@ -9,6 +9,7 @@ import { speak, canSpeak } from "../tts.js";
  *   surface  — как слово выглядит в тексте
  *   ctx      — { s, a, b, book, bookId, ch } предложение из книги
  *   alt      — { label, run } вторая возможность: «Только слово: after»
+ *   note     — { label, run } ссылка на заметку к этому месту книги (только в читалке)
  *   onChange — вызывается после добавления/удаления
  *   onClose
  */
@@ -106,7 +107,13 @@ export function openSlip(opts) {
       root.append(actions);
     }
     if (alt) root.append(h("div", null, h("button", { class: "linkbtn", onClick: alt.run }, alt.label)));
+    noteLink(root);
     return root;
+  }
+
+  /** «Оставить заметку к этому месту» — под основными действиями. */
+  function noteLink(root) {
+    if (o.note) root.append(h("div", { style: { marginTop: "6px" } }, h("button", { class: "linkbtn", onClick: o.note.run }, icon("flag", 15), o.note.label)));
   }
 
   function unknown() {
@@ -135,6 +142,7 @@ export function openSlip(opts) {
       h("div", { class: "slip-actions" }, add),
     );
     if (alt) root.append(h("div", null, h("button", { class: "linkbtn", onClick: alt.run }, alt.label)));
+    noteLink(root);
     return root;
   }
 

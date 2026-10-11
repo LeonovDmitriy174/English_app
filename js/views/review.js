@@ -1,10 +1,12 @@
-// review.js — повторение словаря: карточки, написание, слово в предложении, микс.
+// review.js — повторение словаря: выбор ответа, написание, слово в предложении, микс.
 import { h, icon } from "../dom.js";
 import { app, subscribe, queue, answerCard, kindClass, posLabel } from "../store.js";
 import { isNew } from "../levels.js";
 import { levelBar } from "./level.js";
 import { distance } from "../lex.js";
 import { speak, canSpeak } from "../tts.js";
+import { buildChoices, optionText } from "../choices.js";
+import { newTracker, judgeInSession, requeuePosition } from "../session.js";
 
 const plural = (n, f) => {
   const a = n % 10;
@@ -13,8 +15,8 @@ const plural = (n, f) => {
 };
 
 const MODES = [
-  ["mix", "Микс", "Новые слова — карточкой, дальше режимы чередуются"],
-  ["card", "Карточки", "Видите слово и вспоминаете перевод"],
+  ["mix", "Микс", "Новые слова с вариантами ответа, дальше режимы чередуются"],
+  ["choice", "Выбор", "Видите слово и выбираете перевод из четырёх вариантов"],
   ["spell", "Написание", "Видите перевод и пишете слово по-английски"],
   ["cloze", "Слово в предложении", "Вставляете пропущенное слово в предложение из книги"],
 ];
@@ -42,13 +44,17 @@ function clozeOk(card) {
   return wordCount(ctx.s.slice(ctx.a, ctx.b)) === wordCount(card.w);
 }
 
+/** Начиная с этого уровня в миксе остаются только письменные режимы: угадать слово по буквам нельзя. */
+const WRITE_FROM = 4;
+
 function pickMode(card) {
   const m = prefs.mode;
-  if (m === "card" || m === "spell") return m;
+  if (m === "choice" || m === "spell") return m;
   const cloze = clozeOk(card);
-  if (m === "cloze") return cloze ? "cloze" : "card";
-  if (isNew(card.srs)) return "card";
-  const pool = cloze ? ["card", "spell", "cloze", "cloze"] : ["card", "spell"];
+  if (m === "cloze") return cloze ? "cloze" : "choice";
+  if (isNew(card.srs)) return "choice";
+  const pool = card.srs.lv >= WRITE_FROM ? ["spell"] : ["choice", "spell"];
+  if (cloze) pool.push("cloze", "cloze");
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
@@ -142,7 +148,7 @@ export function renderReview(root) {
   function start() {
     const q = queue(prefs.scope);
     if (!q.list.length) return;
-    session = { ids: q.list.map((c) => c.id), i: 0, done: 0, right: 0 };
+    session = { ids: q.list.map((c) => c.id), i: 0, done: 0, right: 0, tracker: newTracker() };
     nextCard();
   }
 
@@ -189,13 +195,18 @@ export function renderReview(root) {
     return [card.ru ? h("p", { class: "ru" }, card.ru) : card.rm && h("p", { class: "ru auto" }, card.rm), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
   }
 
-  /** Записывает ответ и ведёт сессию дальше. Время и уровень пользователю не показываются, кроме индикатора. */
+  /**
+   * Записывает ответ и ведёт сессию дальше. Время и уровень пользователю не показываются, кроме индикатора.
+   * Правило захода (session.js): слово поднимается не больше чем на уровень за заход, а после ошибки
+   * возвращается ещё раз, чтобы закрепить ответ, но уровень от этого уже не растёт.
+   */
   async function record(card, result, written) {
-    const res = await answerCard(card.id, result, { written });
+    const { effective, requeue } = judgeInSession(session.tracker, card.id, result);
+    const res = await answerCard(card.id, effective, { written });
     session.done += 1;
     if (result === "ok") session.right += 1;
-    if (res.card.srs.due - Date.now() <= 20 * 60000) session.ids.push(card.id); // вернётся в этой же сессии
     session.i += 1;
+    if (requeue) session.ids.splice(requeuePosition(session.i, session.ids.length), 0, card.id);
     return res;
   }
 
@@ -211,27 +222,48 @@ export function renderReview(root) {
     const mode = pickMode(card);
     if (mode === "spell") return spell(card);
     if (mode === "cloze") return cloze(card);
-    return flash(card);
+    return choice(card);
   }
 
-  // Режим 1: карточка. Вспомнили или нет: уровень считается сам.
-  function flash(card) {
+  // Режим 1: выбор. Слово (и фраза из книги) и четыре варианта, верный только один.
+  function choice(card) {
+    const built = buildChoices(card, app.glossary, app.cards);
+    if (!built || built.options.length < 3) return spell(card); // в словаре не нашлось, из чего выбирать
+    const { options, kind } = built;
+    let answered = false;
+    const q = quote(card);
+    const list = h(
+      "div",
+      { class: "choices", role: "group", "aria-label": kind === "en" ? "Варианты определения" : "Варианты перевода" },
+      options.map((o) => h("button", { class: "opt", onClick: () => pick(o) }, h("span", { class: "t" }, o.text))),
+    );
+    const after = h("div", { class: "rv-after" });
+    const prompt = h("p", { class: "rv-hint" }, kind === "en" ? "Выберите определение" : "Выберите перевод");
     frame(
       card,
-      h("div", { class: "rv-body" }, headword(card), h("p", { class: "rv-hint" }, "Вспомните перевод, затем проверьте себя")),
-      h("button", { class: "btn primary block", onClick: reveal }, "Показать ответ"),
+      h("div", { class: "rv-body choose" }, headword(card), q && h("div", { class: "rv-ctx" }, q), prompt, after, list),
+      null,
     );
-    function reveal() {
-      const verdict = (result) => async (e) => {
-        e.currentTarget.parentElement.querySelectorAll("button").forEach((b) => (b.disabled = true));
-        await record(card, result, false);
-        nextCard();
-      };
-      frame(
-        card,
-        h("div", { class: "rv-body" }, headword(card, false), h("div", { style: { marginTop: "12px" } }, answerBlock(card))),
-        h("div", { class: "grades two" }, h("button", { class: "grade", onClick: verdict("no") }, "Не помню"), h("button", { class: "grade good", onClick: verdict("ok") }, "Помню")),
-      );
+
+    async function pick(chosen) {
+      if (answered) return;
+      answered = true;
+      list.classList.add("locked");
+      prompt.remove();
+      const res = await record(card, chosen.ok ? "ok" : "no", false);
+      [...list.children].forEach((b, i) => {
+        const o = options[i];
+        b.classList.add(o.ok ? "right" : o === chosen ? "wrong" : "dim");
+        if (o.ok || o === chosen) b.append(icon(o.ok ? "check" : "close", 20));
+      });
+      view.querySelector(".lvl-line")?.replaceChildren(levelBar(res.after, res.after > res.before));
+      // Если вариант на кнопке обрезан, полный текст показываем под вопросом
+      const full = card[kind];
+      if (full && optionText(card, kind) !== full) after.append(h("p", { class: kind === "ru" ? "ru" : "ru auto" }, full));
+      if (kind !== "en" && card.en) after.append(h("p", { class: "def" }, card.en));
+      if (card.ex) after.append(h("p", { class: "exl" }, h("small", null, "Пример"), card.ex));
+      view.querySelector(".rv-foot").append(nextBtn());
+      focusNext();
       if (app.settings.speakOnTap) speak(card.w);
     }
   }

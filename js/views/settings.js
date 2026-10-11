@@ -79,8 +79,9 @@ export function openAppSettings() {
     fileInput.value = "";
     if (!f) return;
     try {
-      const n = await importData(await f.text());
-      toast(n ? `Загружено карточек: ${n}` : "Новых данных в копии нет");
+      const { cards, notes } = await importData(await f.text());
+      const parts = [cards && `карточек: ${cards}`, notes && `заметок: ${notes}`].filter(Boolean);
+      toast(parts.length ? `Загружено ${parts.join(", ")}` : "Новых данных в копии нет");
     } catch (err) {
       toast(err.message || "Не удалось прочитать файл");
     }

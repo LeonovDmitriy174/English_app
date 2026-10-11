@@ -5,6 +5,7 @@ import { readEpub } from "./epub.js";
 import { openZip } from "./zip.js";
 import { analyzeBook, dictSignature } from "./analysis.js";
 import * as levels from "./levels.js";
+import { newNote, noteAt, mergeNotes } from "./notes.js";
 
 export const APP_NAME = "Ember Chronicle";
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
@@ -16,6 +17,8 @@ export const app = {
   settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20 },
   daily: { day: "", newDone: 0 },
   analysis: null, // { id, pct } пока идёт разбор книги
+  notes: [], // заметки и закладки к книгам (js/notes.js)
+  jump: null, // { id } заметка, к которой читалка должна перейти при открытии
 };
 
 const listeners = new Set();
@@ -42,7 +45,8 @@ export async function init() {
   } catch {
     app.glossary = new Glossary([]);
   }
-  const [cards, books, kvSettings, kvDaily] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily")]);
+  const [cards, books, kvSettings, kvDaily, kvNotes] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily"), db.get("kv", "notes")]);
+  app.notes = Array.isArray(kvNotes?.value) ? kvNotes.value : [];
   for (const c of cards) {
     if (!c.srs) {
       // карточка из версий 1–2 (алгоритм FSRS): переводим в уровни
@@ -216,6 +220,61 @@ export async function removeBook(id) {
   emit();
 }
 
+// ── Заметки к книгам ──────────────────────────────────────────────────────
+const persistNotes = () => db.put("kv", { key: "notes", value: app.notes });
+
+/**
+ * Заметка на этом месте книги: уже существующая или новая (пустая — это закладка).
+ * place: { book, ch, p, quote, chTitle } — название книги берётся из библиотеки, чтобы оно сохранилось вместе с заметкой.
+ */
+export async function ensureNote({ book: bookId, ch, p, quote, chTitle }) {
+  const found = noteAt(app.notes, bookId, ch, p);
+  if (found) return found;
+  const b = app.books.find((x) => x.id === bookId);
+  const n = newNote({ book: bookId, bookTitle: b?.title || "", ch, chTitle: chTitle || b?.chapters[ch]?.title || "", p, quote });
+  app.notes.push(n);
+  await persistNotes();
+  emit();
+  return n;
+}
+
+/** Меняет текст комментария. Пустой текст оставляет закладку. */
+export async function setNoteText(id, text) {
+  const n = app.notes.find((x) => x.id === id);
+  if (!n) return null;
+  const next = String(text || "").trim();
+  if (n.text === next) return n;
+  n.text = next;
+  n.updated = Date.now();
+  await persistNotes();
+  emit();
+  return n;
+}
+
+export async function removeNote(id) {
+  app.notes = app.notes.filter((n) => n.id !== id);
+  await persistNotes();
+  emit();
+}
+
+/** Читалка нашла заметку в другом абзаце (разбор главы изменился): запоминаем новое место без лишних перерисовок. */
+export async function moveNote(id, p) {
+  const n = app.notes.find((x) => x.id === id);
+  if (!n || n.p === p) return;
+  if (noteAt(app.notes, n.book, n.ch, p)) return; // там уже есть другая заметка
+  n.p = p;
+  await persistNotes();
+}
+
+/** Открывает книгу на месте заметки. */
+export function jumpToNote(n) {
+  if (!app.books.some((b) => b.id === n.book)) return false;
+  app.jump = { id: n.id };
+  saveProgress(n.book, n.ch, n.p);
+  location.hash = `#/read/${n.book}`;
+  return true;
+}
+
 // ── Автоматический разбор книг ────────────────────────────────────────────
 let analyzing = false;
 
@@ -261,10 +320,11 @@ export async function exportData() {
   return JSON.stringify(
     {
       app: BACKUP_TAG,
-      version: 2,
+      version: 3,
       exported: new Date().toISOString(),
       settings: app.settings,
       cards: [...app.cards.values()],
+      notes: app.notes,
       log,
       progress: app.books.map((b) => ({ id: b.id, title: b.title, author: b.author, progress: b.progress })),
     },
@@ -300,6 +360,15 @@ export async function importData(text) {
     } else waiting[p.id] = p.progress;
   }
   await db.put("kv", { key: "progress", value: waiting });
+  let notesAdded = 0;
+  if (Array.isArray(data.notes) && data.notes.length) {
+    const merged = mergeNotes(app.notes, data.notes);
+    if (merged.changed) {
+      app.notes = merged.list;
+      await persistNotes();
+      notesAdded = merged.changed;
+    }
+  }
   if (Array.isArray(data.log) && !(await db.all("log")).length) for (const row of data.log) await db.add("log", row);
   if (data.settings) {
     Object.assign(app.settings, data.settings);
@@ -307,5 +376,5 @@ export async function importData(text) {
     await db.put("kv", { key: "settings", value: app.settings });
   }
   emit();
-  return added;
+  return { cards: added, notes: notesAdded };
 }

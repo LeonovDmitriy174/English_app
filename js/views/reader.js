@@ -1,6 +1,8 @@
 // reader.js — читалка: текст главы, нажатие на слово, подчёркивание сохранённого, прогресс.
 import { h, icon, openSheet, closeSheet } from "../dom.js";
-import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf } from "../store.js";
+import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote } from "../store.js";
+import { noteAt, notesIn, findAnchor } from "../notes.js";
+import { openNoteSheet } from "./notes.js";
 import { chapterBlocks } from "../epub.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
@@ -99,6 +101,7 @@ export function renderReader(root, bookId) {
     { class: "rbar" },
     h("button", { class: "iconbtn", "aria-label": "К списку книг", onClick: () => (location.hash = "#/library") }, icon("back", 24)),
     titleBtn,
+    h("button", { class: "iconbtn", "aria-label": "Оставить заметку или закладку", onClick: () => openNoteAt(currentPara()) }, icon("flag", 22)),
     h("button", { class: "iconbtn aa", "aria-label": "Настройки чтения", onClick: () => openReaderSettings() }, "Aa"),
     rprog,
   );
@@ -159,12 +162,21 @@ export function renderReader(root, bookId) {
     selected = idxs.map((k) => d.spans[k]).filter(Boolean);
     selected.forEach((sp) => (sp.dataset.sel = entry ? entry.t : "x"));
 
+    const k = paras.indexOf(d);
+    const note = {
+      label: noteAt(app.notes, book.id, chIdx, k) ? "Открыть заметку к этому месту" : "Оставить заметку к этому месту",
+      run: () => {
+        slip?.close();
+        openNoteAt(k, sentence);
+      },
+    };
     const opts = {
       entry,
       proper,
       surface: d.ptext.slice(first.start, last.end),
       ctx,
       alt,
+      note,
       modeless: true,
       onChange: mark,
       onClose: () => {
@@ -191,11 +203,70 @@ export function renderReader(root, bookId) {
   text.addEventListener("click", (e) => {
     const sp = e.target.closest(".w");
     const d = sp?.closest("p")?._d;
-    if (d) openAt(d, +sp.dataset.i);
+    if (d) return openAt(d, +sp.dataset.i);
+    // Касание поля справа от абзаца — заметка к этому абзацу
+    if (e.target === text) {
+      const r = text.getBoundingClientRect();
+      const edge = r.right - parseFloat(getComputedStyle(text).paddingRight);
+      if (e.clientX < edge) return;
+      const k = paras.findIndex((p) => {
+        const b = p.el.getBoundingClientRect();
+        return e.clientY >= b.top - 4 && e.clientY <= b.bottom + 4;
+      });
+      if (k >= 0) openNoteAt(k);
+    }
   });
   view.addEventListener("click", (e) => {
     if (slip && !e.target.closest(".w") && !e.target.closest(".rbar")) slip.close();
   });
+
+  // ── заметки ─────────────────────────────────────────────────────────────
+  /** Абзац, который читаете сейчас: примерно на трети высоты экрана. */
+  function currentPara() {
+    const y = view.scrollTop + view.clientHeight * 0.28;
+    const k = paras.findIndex((d) => d.el.offsetTop + d.el.offsetHeight > y);
+    return k < 0 ? Math.max(paras.length - 1, 0) : k;
+  }
+
+  function pulse(d) {
+    if (!d) return;
+    d.el.classList.remove("pulse");
+    void d.el.offsetWidth; // перезапуск анимации
+    d.el.classList.add("pulse");
+    setTimeout(() => d.el.classList.remove("pulse"), 2000);
+  }
+
+  /** Открывает заметку к абзацу k, а если её нет, создаёт (пустую — это закладка). */
+  async function openNoteAt(k, quote) {
+    const d = paras[k];
+    if (!d) return;
+    const n = await ensureNote({ book: book.id, ch: chIdx, p: k, quote: quote || d.ptext, chTitle: prettyTitle(book.chapters[chIdx].title) });
+    pulse(d);
+    openNoteSheet(n);
+  }
+
+  /** Флажки в правом поле: контур — закладка, закрашенный — с комментарием. */
+  function renderFlags() {
+    for (const d of paras) {
+      d.flag?.remove();
+      d.flag = null;
+    }
+    for (const n of notesIn(app.notes, book.id, chIdx)) {
+      const d = paras[Math.min(n.p, paras.length - 1)];
+      if (!d || d.flag) continue;
+      d.flag = h("button", { class: `note-flag${n.text ? " has-text" : ""}`, "aria-label": n.text ? "Заметка к абзацу" : "Закладка", onClick: () => openNoteAt(paras.indexOf(d)) }, icon("flag", 15));
+      d.el.append(d.flag);
+    }
+  }
+
+  /** Номера абзацев в заметках могли сдвинуться, если разбор главы изменился: сверяем по цитате. */
+  function reanchor() {
+    const texts = paras.map((d) => d.ptext);
+    for (const n of notesIn(app.notes, book.id, chIdx)) {
+      const k = findAnchor(texts, n);
+      if (k !== n.p) moveNote(n.id, k);
+    }
+  }
 
   // ── главы ───────────────────────────────────────────────────────────────
   async function load(idx, startPara = 0) {
@@ -230,18 +301,32 @@ export function renderReader(root, bookId) {
       frag.append(el);
     }
     text.replaceChildren(frag);
+    reanchor();
     mark();
+    renderFlags();
     buildNav();
     view.scrollTop = 0;
     lastY = 0;
     bar.classList.remove("hide");
-    if (startPara > 0) {
-      requestAnimationFrame(() => {
-        const d = paras[startPara];
-        if (d) view.scrollTop = Math.max(0, d.el.offsetTop - 84);
-      });
+    // Пришли из списка заметок: открываем главу на месте заметки и подсвечиваем абзац
+    let target = startPara;
+    let flash = null;
+    if (app.jump) {
+      const n = app.notes.find((x) => x.id === app.jump.id);
+      if (n && n.book === book.id && n.ch === idx) {
+        target = Math.min(n.p, paras.length - 1);
+        flash = paras[target];
+      }
+      app.jump = null;
     }
-    saveProgress(book.id, idx, startPara);
+    if (target > 0) {
+      requestAnimationFrame(() => {
+        const d = paras[target];
+        if (d) view.scrollTop = Math.max(0, d.el.offsetTop - 84);
+        pulse(flash);
+      });
+    } else pulse(flash);
+    saveProgress(book.id, idx, target);
     onScroll();
   }
 
@@ -312,7 +397,10 @@ export function renderReader(root, bookId) {
   }
   view.addEventListener("scroll", onScroll, { passive: true });
 
-  const off = subscribe(mark);
+  const off = subscribe(() => {
+    mark();
+    renderFlags();
+  });
   load(chIdx, book.progress?.p || 0);
 
   return () => {
