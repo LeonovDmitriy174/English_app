@@ -1,0 +1,10 @@
+# окружения и служебные папки
+.venv/
+venv/
+.idea/
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+# резервные копии данных приложения лежат у вас, а не в репозитории
+ember-backup-*.json
