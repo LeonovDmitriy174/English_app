@@ -3,7 +3,8 @@ import { db, requestPersistence } from "./db.js";
 import { Glossary, lemmaCandidates } from "./lex.js";
 import { readEpub } from "./epub.js";
 import { openZip } from "./zip.js";
-import * as fsrs from "./fsrs.js";
+import { analyzeBook, dictSignature } from "./analysis.js";
+import * as levels from "./levels.js";
 
 export const APP_NAME = "Ember Chronicle";
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
@@ -14,6 +15,7 @@ export const app = {
   books: [],
   settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20 },
   daily: { day: "", newDone: 0 },
+  analysis: null, // { id, pct } пока идёт разбор книги
 };
 
 const listeners = new Set();
@@ -41,7 +43,15 @@ export async function init() {
     app.glossary = new Glossary([]);
   }
   const [cards, books, kvSettings, kvDaily] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily")]);
-  cards.forEach((c) => app.cards.set(c.id, c));
+  for (const c of cards) {
+    if (!c.srs) {
+      // карточка из версий 1–2 (алгоритм FSRS): переводим в уровни
+      c.srs = levels.fromLegacy(c.fsrs);
+      delete c.fsrs;
+      await db.put("cards", c);
+    }
+    app.cards.set(c.id, c);
+  }
   app.books = books.sort((a, b) => (b.opened || b.added) - (a.opened || a.added));
   Object.assign(app.settings, kvSettings?.value || {});
   if (kvDaily?.value?.day === today()) app.daily = kvDaily.value;
@@ -84,12 +94,12 @@ export async function saveCard(entry, ctx) {
       w: entry.w,
       t: entry.t,
       pos: entry.pos || "",
-      ru: entry.ru,
+      ru: entry.ru || "",
       en: entry.en || "",
       ex: entry.ex || "",
       custom: !!entry.custom,
       ctx: [],
-      fsrs: fsrs.newState(),
+      srs: levels.newSrs(),
       added: Date.now(),
     };
   }
@@ -121,30 +131,29 @@ export async function removeCard(id) {
 export function queue(scope = "all", now = Date.now()) {
   const inScope = (c) => scope === "all" || c.t === scope;
   const all = [...app.cards.values()].filter(inScope);
-  const due = all.filter((c) => c.fsrs.state !== fsrs.State.New && c.fsrs.due <= now).sort((a, b) => a.fsrs.due - b.fsrs.due);
+  const due = all.filter((c) => !levels.isNew(c.srs) && c.srs.due <= now).sort((a, b) => a.srs.due - b.srs.due);
   const left = Math.max(0, app.settings.newPerDay - (app.daily.day === today() ? app.daily.newDone : 0));
-  const fresh = all.filter((c) => c.fsrs.state === fsrs.State.New).sort((a, b) => a.added - b.added).slice(0, left);
+  const fresh = all.filter((c) => levels.isNew(c.srs)).sort((a, b) => a.added - b.added).slice(0, left);
   return { due, fresh, list: [...due, ...fresh] };
 }
 
-export function nextDueAt() {
-  const times = [...app.cards.values()].filter((c) => c.fsrs.state !== fsrs.State.New).map((c) => c.fsrs.due);
-  return times.length ? Math.min(...times) : null;
-}
-
-export async function gradeCard(id, rating, now = Date.now()) {
+/**
+ * Записать ответ на карточку. result: 'ok' | 'near' | 'no', written: режим с письмом.
+ * Возвращает { card, before, after }: уровень до и после ответа (для индикатора).
+ */
+export async function answerCard(id, result, { written = false, now = Date.now() } = {}) {
   const c = app.cards.get(id);
-  const wasNew = c.fsrs.state === fsrs.State.New;
-  c.fsrs = fsrs.review(c.fsrs, rating, now);
+  const before = c.srs.lv;
+  c.srs = levels.answer(c.srs, result, { written, now });
   await db.put("cards", c);
-  await db.add("log", { id, t: now, rating });
-  if (wasNew) {
+  await db.add("log", { id, t: now, result, written, lv: c.srs.lv });
+  if (before === 0) {
     if (app.daily.day !== today()) app.daily = { day: today(), newDone: 0 };
     app.daily.newDone += 1;
     await db.put("kv", { key: "daily", value: app.daily });
   }
   emit();
-  return c;
+  return { card: c, before, after: c.srs.lv };
 }
 
 // ── Книги ─────────────────────────────────────────────────────────────────
@@ -197,13 +206,52 @@ export async function removeBook(id) {
   emit();
 }
 
+// ── Автоматический разбор книг ────────────────────────────────────────────
+let analyzing = false;
+
+/** Разбирает книги, у которых нет свежего разбора (новая книга или другой словарь). Идёт в фоне. */
+export async function ensureAnalysis() {
+  if (analyzing) return;
+  analyzing = true;
+  try {
+    const sig = dictSignature(app.glossary);
+    for (const b of [...app.books]) {
+      if (b.stats?.sig === sig) continue;
+      app.analysis = { id: b.id, pct: 0 };
+      emit();
+      try {
+        const zip = await bookZip(b.id);
+        b.stats = await analyzeBook(b, zip, app.glossary, (pct) => {
+          app.analysis = { id: b.id, pct };
+          emit();
+        });
+        namesCache.delete(b.id);
+        await db.put("books", b);
+      } catch {
+        /* книга не открылась: разбор можно повторить позже */
+      }
+    }
+  } finally {
+    app.analysis = null;
+    analyzing = false;
+    emit();
+  }
+}
+
+const namesCache = new Map();
+/** Слова книги, похожие на имена собственные (по разбору). */
+export function namesOf(book) {
+  if (!namesCache.has(book.id)) namesCache.set(book.id, new Set(book.stats?.names || []));
+  return namesCache.get(book.id);
+}
+
 // ── Резервная копия ───────────────────────────────────────────────────────
 export async function exportData() {
   const log = await db.all("log");
   return JSON.stringify(
     {
       app: BACKUP_TAG,
-      version: 1,
+      version: 2,
       exported: new Date().toISOString(),
       settings: app.settings,
       cards: [...app.cards.values()],
@@ -220,8 +268,12 @@ export async function importData(text) {
   if (data.app !== BACKUP_TAG || !Array.isArray(data.cards)) throw new Error("Это не резервная копия приложения.");
   let added = 0;
   for (const c of data.cards) {
+    if (!c.srs) {
+      c.srs = levels.fromLegacy(c.fsrs);
+      delete c.fsrs;
+    }
     const mine = app.cards.get(c.id);
-    const better = !mine || (c.fsrs?.reps || 0) > (mine.fsrs?.reps || 0) || (c.fsrs?.last || 0) > (mine.fsrs?.last || 0);
+    const better = !mine || (c.srs.reps || 0) > (mine.srs.reps || 0) || (c.srs.last || 0) > (mine.srs.last || 0);
     if (better) {
       app.cards.set(c.id, c);
       await db.put("cards", c);

@@ -152,14 +152,15 @@ for (const line of IRREGULAR_SRC.trim().split("\n")) {
 /** Возможные начальные формы слова в порядке убывания вероятности. */
 export function lemmaCandidates(raw) {
   const out = [];
-  const add = (x) => {
-    if (x && x.length > 1 && !out.includes(x)) out.push(x);
+  // Односимвольными бывают только слова «a» и «I»; обрезанные окончания короче двух букв отбрасываем.
+  const add = (x, short = false) => {
+    if (x && (x.length > 1 || short) && !out.includes(x)) out.push(x);
   };
   let w = norm(raw);
-  add(w);
+  add(w, w === "a" || w === "i");
   w = w.replace(/'s$/, "").replace(/s'$/, "s").replace(/n't$/, "").replace(/'(ll|re|ve|d|m)$/, "");
   if (w.endsWith("'")) w = w.slice(0, -1);
-  add(w);
+  add(w, w === "a" || w === "i");
   const irr = IRREGULAR.get(w);
   if (irr) irr.forEach(add);
 

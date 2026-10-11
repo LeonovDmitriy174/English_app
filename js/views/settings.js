@@ -106,6 +106,8 @@ export function openAppSettings() {
       row("Новых слов в день", "Сколько новых карточек добавлять в повторение", stepper("newPerDay", { min: 5, max: 60, step: 5, label: "Новых слов в день" })),
       h("div", { class: "set-actions" }, h("button", { class: "btn quiet block", onClick: save }, "Сохранить копию данных"), h("button", { class: "btn quiet block", onClick: () => fileInput.click() }, "Загрузить копию данных"), fileInput),
       h("p", { class: "note" }, `${APP_NAME} хранит книги и словарь только на этом устройстве. `, persisted),
+      // Большой словарь собран из Викисловаря (tools/build_dict.py --wiktionary); маленький демо-словарь написан вручную
+      app.glossary.list.length > 1500 && h("p", { class: "note" }, "Переводы, определения и примеры в словаре взяты из английского Викисловаря (wiktionary.org) через проект wiktextract; лицензия CC BY-SA 4.0."),
     ),
   });
 }

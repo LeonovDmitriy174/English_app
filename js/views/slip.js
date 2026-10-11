@@ -57,8 +57,10 @@ export function openSlip(opts) {
         h("div", null, h("h2", { class: "hw" }, entry.w), h("p", { class: "meta" }, posLabel(entry)), differs && h("p", { class: "meta via" }, `в тексте: ${shown}`)),
         canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(entry.w) }, icon("speaker", 24)),
       ),
-      h("p", { class: "ru" }, entry.ru),
+      entry.ru && h("p", { class: "ru" }, entry.ru),
       entry.en && h("p", { class: "def" }, entry.en),
+      !entry.ru && h("p", { class: "note" }, "Перевода на русский пока нет, только определение."),
+      entry.of?.length && h("p", { class: "meta via" }, `Может быть и формой слова: ${entry.of.join(", ")}`),
       quote(ctx || saved?.ctx?.[0]),
       entry.ex && h("p", { class: "exl" }, h("small", null, "Пример"), entry.ex),
     );
@@ -107,13 +109,14 @@ export function openSlip(opts) {
 
   function unknown() {
     const { surface, ctx, alt } = o;
-    const word = (surface || "").toLowerCase().replace(/['’]s$/, "");
+    const bare = (surface || "").replace(/['’]s$/, "");
+    const word = o.proper ? bare : bare.toLowerCase(); // у имён сохраняем заглавную букву
     const input = h("input", { class: "field", type: "text", placeholder: "Перевод", autocomplete: "off", autocapitalize: "off", "aria-label": "Перевод слова" });
     const add = h("button", { class: "btn primary grow", disabled: true, onClick: save }, icon("plus", 20), "В словарь");
     input.addEventListener("input", () => (add.disabled = !input.value.trim()));
     input.addEventListener("keydown", (e) => e.key === "Enter" && input.value.trim() && save());
     async function save() {
-      const entry = { id: `w:${word}`, t: "w", w: word, pos: "", ru: input.value.trim(), en: "", ex: "", custom: true };
+      const entry = { id: `w:${word.toLowerCase()}`, t: "w", w: word, pos: "", ru: input.value.trim(), en: "", ex: "", custom: true };
       await saveCard(entry, ctx);
       toast("Добавлено в словарь");
       o.onChange?.();
@@ -123,8 +126,8 @@ export function openSlip(opts) {
     const root = h(
       "div",
       null,
-      h("div", { class: "slip-head" }, h("div", null, h("h2", { class: "hw" }, word), h("p", { class: "meta" }, "нет в словаре")), canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(word) }, icon("speaker", 24))),
-      h("p", { class: "note" }, "Для этого слова пока нет готового перевода. Впишите свой: он сохранится в вашем словаре вместе с предложением из книги."),
+      h("div", { class: "slip-head" }, h("div", null, h("h2", { class: "hw" }, word), h("p", { class: "meta" }, o.proper ? "имя или название" : "нет в словаре")), canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(word) }, icon("speaker", 24))),
+      h("p", { class: "note" }, o.proper ? "Похоже на имя или название: перевод обычно не нужен. Если хотите, впишите свой, и он сохранится вместе с предложением из книги." : "Для этого слова пока нет готового перевода. Впишите свой: он сохранится в вашем словаре вместе с предложением из книги."),
       quote(ctx),
       h("div", { style: { marginTop: "16px" } }, input),
       h("div", { class: "slip-actions" }, add),

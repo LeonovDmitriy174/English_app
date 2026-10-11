@@ -67,3 +67,15 @@ test("расстояние Левенштейна", () => {
   assert.equal(distance("abc", "abc"), 0);
   assert.equal(distance("kitten", "sitting"), 3);
 });
+
+test("односимвольные слова «a» и «I» ищутся, а обрезки окончаний короче двух букв — нет", () => {
+  const g = new Glossary([
+    { t: "w", w: "a", pos: "article", ru: "один" },
+    { t: "w", w: "i", pos: "pronoun", ru: "я" },
+  ]);
+  assert.equal(g.lookupWord("A")?.w, "a");
+  assert.equal(g.lookupWord("I")?.w, "i");
+  assert.equal(g.lookupWord("I'm")?.w, "i");
+  assert.equal(g.lookupWord("is"), null, "«is» не должно превращаться в «i»");
+  assert.equal(g.lookupWord("as"), null, "«as» не должно превращаться в «a»");
+});

@@ -1,6 +1,6 @@
 // reader.js — читалка: текст главы, нажатие на слово, подчёркивание сохранённого, прогресс.
 import { h, icon, openSheet, closeSheet } from "../dom.js";
-import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass } from "../store.js";
+import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf } from "../store.js";
 import { chapterBlocks } from "../epub.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
@@ -64,12 +64,15 @@ function wrapParagraph(p) {
   return { ptext, tokens, spans };
 }
 
-function analyze(d) {
+function analyze(d, names) {
   d.phrases = findPhrases(app.glossary, d.tokens, d.ptext);
-  d.info = d.tokens.map(() => ({ entry: null, ph: null }));
+  d.info = d.tokens.map(() => ({ entry: null, ph: null, proper: false }));
   d.phrases.forEach((m, k) => m.idxs.forEach((i) => (d.info[i].ph = k)));
   d.tokens.forEach((t, i) => {
-    if (d.info[i].ph == null) d.info[i].entry = resolveWord(t.raw);
+    if (d.info[i].ph != null) return;
+    // Harry, Hogwarts: слово, которое в книге всегда пишется с заглавной, считаем именем, а не словарным словом
+    if (names.has(t.surf) && t.raw !== t.raw.toLowerCase()) d.info[i].proper = true;
+    else d.info[i].entry = resolveWord(t.raw);
   });
 }
 
@@ -133,7 +136,8 @@ export function renderReader(root, bookId) {
     const inf = d.info[i];
     const phrase = !onlyWord && inf.ph != null ? d.phrases[inf.ph] : null;
     const partOfPhrase = inf.ph != null ? d.phrases[inf.ph] : null;
-    const entry = phrase ? phrase.entry : inf.entry ?? resolveWord(tok.raw);
+    const proper = !phrase && inf.proper;
+    const entry = phrase ? phrase.entry : proper ? null : inf.entry ?? resolveWord(tok.raw);
     const idxs = phrase ? phrase.idxs : [i];
     const first = d.tokens[idxs[0]];
     const last = d.tokens[idxs[idxs.length - 1]];
@@ -157,6 +161,7 @@ export function renderReader(root, bookId) {
 
     const opts = {
       entry,
+      proper,
       surface: d.ptext.slice(first.start, last.end),
       ctx,
       alt,
@@ -209,6 +214,7 @@ export function renderReader(root, bookId) {
       return;
     }
     paras = [];
+    const names = namesOf(book);
     const frag = document.createDocumentFragment();
     for (const { kind, el } of blocks) {
       if (kind === "h") {
@@ -217,7 +223,7 @@ export function renderReader(root, bookId) {
       } else {
         const d = wrapParagraph(el);
         d.el = el;
-        analyze(d);
+        analyze(d, names);
         el._d = d;
         paras.push(d);
       }

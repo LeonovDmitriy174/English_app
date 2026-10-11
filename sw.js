@@ -22,7 +22,8 @@ const FILES = [
   "js/db.js",
   "js/store.js",
   "js/lex.js",
-  "js/fsrs.js",
+  "js/levels.js",
+  "js/analysis.js",
   "js/zip.js",
   "js/epub.js",
   "js/tts.js",
@@ -32,6 +33,7 @@ const FILES = [
   "js/views/dict.js",
   "js/views/review.js",
   "js/views/settings.js",
+  "js/views/level.js",
 ];
 
 // Установка: кладём все файлы в новый кэш. cache: "reload" — мимо HTTP-кэша браузера,

@@ -1,7 +1,8 @@
 // review.js — повторение словаря: карточки, написание, слово в предложении, микс.
 import { h, icon } from "../dom.js";
-import { app, subscribe, queue, nextDueAt, gradeCard, kindClass, posLabel } from "../store.js";
-import * as fsrs from "../fsrs.js";
+import { app, subscribe, queue, answerCard, kindClass, posLabel } from "../store.js";
+import { isNew } from "../levels.js";
+import { levelBar } from "./level.js";
 import { distance } from "../lex.js";
 import { speak, canSpeak } from "../tts.js";
 
@@ -23,13 +24,6 @@ const SCOPES = [
   ["pv", "Фразовые глаголы"],
   ["id", "Идиомы"],
 ];
-const GRADES = [
-  [1, "Снова"],
-  [2, "Трудно"],
-  [3, "Хорошо"],
-  [4, "Легко"],
-];
-
 const prefs = { mode: "mix", scope: "all" };
 
 const normAnswer = (s) =>
@@ -53,7 +47,7 @@ function pickMode(card) {
   if (m === "card" || m === "spell") return m;
   const cloze = clozeOk(card);
   if (m === "cloze") return cloze ? "cloze" : "card";
-  if (card.fsrs.state === fsrs.State.New) return "card";
+  if (isNew(card.srs)) return "card";
   const pool = cloze ? ["card", "spell", "cloze", "cloze"] : ["card", "spell"];
   return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -96,13 +90,11 @@ export function renderReview(root) {
       return;
     }
 
-    const next = nextDueAt();
-    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatDue(next, Date.now())}.` : "";
     page.append(
       total
         ? h("p", { class: "lead" }, `К повторению: ${total} ${plural(total, ["карточка", "карточки", "карточек"])}`)
         : h("p", { class: "lead" }, "На сегодня всё"),
-      h("p", { class: "sub" }, total ? `${q.due.length} на повторение, ${q.fresh.length} новых` : wait || "Новых слов на сегодня нет."),
+      h("p", { class: "sub" }, total ? `${q.due.length} на повторение, ${q.fresh.length} новых` : "Когда слова будут готовы к повторению, на вкладке появится число."),
       h(
         "div",
         { class: "modes", role: "radiogroup", "aria-label": "Режим" },
@@ -150,7 +142,7 @@ export function renderReview(root) {
   function start() {
     const q = queue(prefs.scope);
     if (!q.list.length) return;
-    session = { ids: q.list.map((c) => c.id), i: 0, done: 0 };
+    session = { ids: q.list.map((c) => c.id), i: 0, done: 0, right: 0 };
     nextCard();
   }
 
@@ -175,11 +167,11 @@ export function renderReview(root) {
     );
   }
 
-  function headword(card, big = true) {
+  function headword(card, big = true, lv = card.srs.lv, gained = false) {
     return h(
       "div",
       { class: "slip-head", style: { borderBottom: "0", paddingBottom: "0" } },
-      h("div", null, h("h2", { class: big ? "rv-hw" : "hw" }, card.w), h("p", { class: "meta" }, posLabel(card))),
+      h("div", null, h("h2", { class: big ? "rv-hw" : "hw" }, card.w), h("p", { class: "meta" }, posLabel(card)), h("p", { class: "meta lvl-line" }, levelBar(lv, gained))),
       canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(card.w) }, icon("speaker", 24)),
     );
   }
@@ -194,34 +186,20 @@ export function renderReview(root) {
   }
 
   function answerBlock(card) {
-    return [h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
+    return [card.ru && h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
   }
 
-  function grades(card, suggest) {
-    const now = Date.now();
-    const out = fsrs.outcomes(card.fsrs, now);
-    return h(
-      "div",
-      { class: "grades" },
-      GRADES.map(([g, label]) =>
-        h(
-          "button",
-          { class: `grade${g === 3 ? " good" : ""}${suggest === g ? " suggest" : ""}`, onClick: () => grade(card, g) },
-          h("b", null, label),
-          h("small", null, fsrs.formatDue(out[g].due, now)),
-        ),
-      ),
-    );
-  }
-
-  async function grade(card, g) {
-    const updated = await gradeCard(card.id, g);
+  /** Записывает ответ и ведёт сессию дальше. Время и уровень пользователю не показываются, кроме индикатора. */
+  async function record(card, result, written) {
+    const res = await answerCard(card.id, result, { written });
     session.done += 1;
-    const soon = updated.fsrs.due - Date.now() <= 20 * 60000;
-    if (soon && updated.fsrs.state !== fsrs.State.Review) session.ids.push(card.id);
+    if (result === "ok") session.right += 1;
+    if (res.card.srs.due - Date.now() <= 20 * 60000) session.ids.push(card.id); // вернётся в этой же сессии
     session.i += 1;
-    nextCard();
+    return res;
   }
+
+  const nextBtn = () => h("button", { class: "btn primary block", onClick: nextCard }, "Дальше");
 
   function nextCard() {
     if (session.i >= session.ids.length) return finish();
@@ -236,7 +214,7 @@ export function renderReview(root) {
     return flash(card);
   }
 
-  // Режим 1: карточка
+  // Режим 1: карточка. Вспомнили или нет: уровень считается сам.
   function flash(card) {
     frame(
       card,
@@ -244,7 +222,16 @@ export function renderReview(root) {
       h("button", { class: "btn primary block", onClick: reveal }, "Показать ответ"),
     );
     function reveal() {
-      frame(card, h("div", { class: "rv-body" }, headword(card, false), h("div", { style: { marginTop: "12px" } }, answerBlock(card))), grades(card));
+      const verdict = (result) => async (e) => {
+        e.currentTarget.parentElement.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        await record(card, result, false);
+        nextCard();
+      };
+      frame(
+        card,
+        h("div", { class: "rv-body" }, headword(card, false), h("div", { style: { marginTop: "12px" } }, answerBlock(card))),
+        h("div", { class: "grades two" }, h("button", { class: "grade", onClick: verdict("no") }, "Не помню"), h("button", { class: "grade good", onClick: verdict("ok") }, "Помню")),
+      );
       if (app.settings.speakOnTap) speak(card.w);
     }
   }
@@ -254,15 +241,19 @@ export function renderReview(root) {
     const input = h("input", { class: "field en", type: "text", placeholder: "По-английски", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", enterkeyhint: "done", "aria-label": "Ответ" });
     const hint = h("p", { class: "rv-hint" });
     let hinted = false;
-    const showHint = h("button", {
-      class: "linkbtn",
-      onClick: () => {
-        hinted = true;
-        hint.textContent = `Начинается на «${card.w[0]}», символов: ${card.w.length}`;
-        showHint.remove();
-        input.focus();
+    const showHint = h(
+      "button",
+      {
+        class: "linkbtn",
+        onClick: () => {
+          hinted = true;
+          hint.textContent = `Начинается на «${card.w[0]}», символов: ${card.w.length}`;
+          showHint.remove();
+          input.focus();
+        },
       },
-    }, "Подсказка");
+      "Подсказка",
+    );
     const check = () => finish(input.value);
     const give = h("button", { class: "linkbtn", onClick: () => finish("") }, "Не помню");
     input.addEventListener("keydown", (e) => e.key === "Enter" && check());
@@ -273,8 +264,8 @@ export function renderReview(root) {
         "div",
         { class: "rv-body" },
         h("p", { class: "meta" }, posLabel(card)),
-        h("p", { class: "ru", style: { fontSize: "28px", marginTop: "10px" } }, card.ru),
-        card.en && h("p", { class: "def" }, card.en),
+        h("p", { class: "ru", style: { fontSize: "28px", marginTop: "10px" } }, card.ru || card.en),
+        card.ru && card.en && h("p", { class: "def" }, card.en),
         hint,
         h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
         h("div", { style: { display: "flex", gap: "20px" } }, showHint, give),
@@ -283,16 +274,19 @@ export function renderReview(root) {
     );
     setTimeout(() => input.focus(), 60);
 
-    function finish(value) {
+    async function finish(value) {
       const verdict = judge(value, card.w);
-      const suggest = verdict === "ok" ? (hinted ? 2 : 3) : verdict === "near" ? 2 : 1;
+      // верно, но с подсказкой, и «почти»: уровень остаётся прежним
+      const result = verdict === "ok" ? (hinted ? "near" : "ok") : verdict === "near" ? "near" : "no";
+      const res = await record(card, result, true);
       const fb =
         verdict === "ok"
           ? h("div", { class: "fb ok" }, "Верно")
           : verdict === "near"
             ? h("div", { class: "fb no" }, "Почти. Правильно: ", h("span", { class: "was" }, card.w))
             : h("div", { class: "fb no" }, value.trim() ? "Не совпало. Правильно: " : "Правильный ответ: ", h("span", { class: "was" }, card.w));
-      frame(card, h("div", { class: "rv-body" }, headword(card, false), fb, h("div", { style: { marginTop: "6px" } }, answerBlock(card))), grades(card, suggest));
+      frame(card, h("div", { class: "rv-body" }, headword(card, false, res.after, res.after > res.before), fb, h("div", { style: { marginTop: "6px" } }, answerBlock(card))), nextBtn());
+      focusNext();
       if (app.settings.speakOnTap) speak(card.w);
     }
   }
@@ -313,7 +307,7 @@ export function renderReview(root) {
         { class: "rv-body" },
         h("p", { class: "meta" }, posLabel(card)),
         h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("span", { class: "blank", "aria-label": "пропуск" }), ctx.s.slice(ctx.b)),
-        h("p", { class: "rv-hint" }, `Подсказка: ${card.ru}`),
+        h("p", { class: "rv-hint" }, `Подсказка: ${card.ru || card.en}`),
         h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
         h("div", null, give),
       ),
@@ -321,14 +315,15 @@ export function renderReview(root) {
     );
     setTimeout(() => input.focus(), 60);
 
-    function finish(value) {
+    async function finish(value) {
       let verdict = judge(value, expected);
       let note = null;
       if (verdict !== "ok" && normAnswer(value) === normAnswer(card.w)) {
         verdict = "near";
         note = "Слово верное, но в предложении другая форма: ";
       }
-      const suggest = verdict === "ok" ? 3 : verdict === "near" ? 2 : 1;
+      const result = verdict === "ok" ? "ok" : verdict === "near" ? "near" : "no";
+      const res = await record(card, result, true);
       const fb =
         verdict === "ok"
           ? h("div", { class: "fb ok" }, "Верно")
@@ -341,20 +336,21 @@ export function renderReview(root) {
           h("p", { class: "meta" }, posLabel(card)),
           h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("mark", null, expected), ctx.s.slice(ctx.b)),
           fb,
-          h("div", { style: { marginTop: "6px" } }, h("h2", { class: "hw" }, card.w), h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en)),
+          h("div", { style: { marginTop: "6px" } }, h("h2", { class: "hw" }, card.w), card.ru && h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en), h("p", { class: "meta lvl-line" }, levelBar(res.after, res.after > res.before))),
         ),
-        grades(card, suggest),
+        nextBtn(),
       );
+      focusNext();
       if (app.settings.speakOnTap) speak(ctx.s);
     }
   }
 
+  const focusNext = () => setTimeout(() => view.querySelector(".rv-foot .btn")?.focus(), 30);
+
   function finish() {
     view.className = "view";
     document.body.classList.remove("immersive");
-    const next = nextDueAt();
-    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatDue(next, Date.now())}.` : "";
-    const n = session.done;
+    const { done, right } = session;
     session = null;
     view.replaceChildren(
       h(
@@ -364,7 +360,7 @@ export function renderReview(root) {
           "section",
           { class: "done" },
           h("p", { class: "lead" }, "Готово"),
-          h("p", { class: "sub", style: { margin: "8px 0 26px" } }, `Повторено: ${n} ${plural(n, ["карточка", "карточки", "карточек"])}. ${wait}`),
+          h("p", { class: "sub", style: { margin: "8px 0 26px" } }, done ? `Верных ответов: ${right} из ${done}.` : "Повторение закончено."),
           h("button", { class: "btn primary", onClick: home }, "Вернуться"),
         ),
       ),

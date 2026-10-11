@@ -1,7 +1,8 @@
 // dict.js — словарь пользователя: поиск, фильтры, переход к карточке.
 import { h, icon, closeSheet } from "../dom.js";
 import { app, subscribe, kindClass } from "../store.js";
-import { State, formatDue } from "../fsrs.js";
+import { isNew } from "../levels.js";
+import { levelBar } from "./level.js";
 import { openSlip } from "./slip.js";
 
 const FILTERS = [
@@ -17,11 +18,11 @@ const plural = (n, f) => {
   return f[b > 10 && b < 20 ? 2 : a === 1 ? 0 : a >= 2 && a <= 4 ? 1 : 2];
 };
 
-function dueOf(card, now) {
-  if (card.fsrs.state === State.New) return { text: "новое", hot: true };
-  const diff = card.fsrs.due - now;
-  if (diff <= 0) return { text: "пора", hot: true };
-  return { text: `через ${formatDue(card.fsrs.due, now)}`, hot: false };
+/** Справа в строке: «новое», «пора» или индикатор уровня. Времени повторения не показываем. */
+function stateOf(card, now) {
+  if (isNew(card.srs)) return { text: "новое", hot: true };
+  if (card.srs.due <= now) return { text: "пора", hot: true };
+  return { bar: levelBar(card.srs.lv) };
 }
 
 let filter = "all";
@@ -88,7 +89,7 @@ export function renderDict(root) {
     }
     const now = Date.now();
     const items = [...app.cards.values()]
-      .filter((c) => (filter === "all" || c.t === filter) && (!query || c.w.includes(query) || c.ru.toLowerCase().includes(query)))
+      .filter((c) => (filter === "all" || c.t === filter) && (!query || c.w.toLowerCase().includes(query) || (c.ru || c.en || "").toLowerCase().includes(query)))
       .sort((a, b) => b.added - a.added);
     if (!items.length) {
       list.replaceChildren(h("p", { class: "note" }, "Ничего не найдено."));
@@ -99,7 +100,7 @@ export function renderDict(root) {
         "ul",
         { class: "rows" },
         items.map((c) => {
-          const due = dueOf(c, now);
+          const st = stateOf(c, now);
           return h(
             "li",
             null,
@@ -107,8 +108,8 @@ export function renderDict(root) {
               "button",
               { class: `row ${kindClass(c.t)}`, onClick: () => openSlip({ entry: c, surface: c.w, onChange: () => {} }) },
               h("span", { class: "row-mark" }),
-              h("div", { class: "row-main" }, h("div", { class: "row-hw" }, c.w), h("div", { class: "row-ru" }, c.ru)),
-              h("span", { class: `row-due${due.hot ? " now" : ""}` }, due.text),
+              h("div", { class: "row-main" }, h("div", { class: "row-hw" }, c.w), h("div", { class: "row-ru" }, c.ru || c.en)),
+              h("span", { class: `row-due${st.hot ? " now" : ""}` }, st.bar || st.text),
             ),
           );
         }),

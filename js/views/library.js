@@ -1,6 +1,6 @@
 // library.js — список книг, добавление EPUB.
 import { h, icon, toast, openSheet, closeSheet } from "../dom.js";
-import { app, subscribe, addBook, removeBook } from "../store.js";
+import { app, subscribe, addBook, removeBook, ensureAnalysis } from "../store.js";
 import { openAppSettings } from "./settings.js";
 
 function cover(book) {
@@ -30,6 +30,7 @@ export function renderLibrary(root) {
     try {
       const { book, duplicate } = await addBook(f);
       toast(duplicate ? "Эта книга уже есть в библиотеке" : `Добавлено: ${book.title}`);
+      ensureAnalysis(); // разбор книги пойдёт в фоне
     } catch (err) {
       toast(err.message || "Не удалось открыть файл");
     }
@@ -51,17 +52,58 @@ export function renderLibrary(root) {
   );
   root.replaceChildren(h("main", { class: "view" }, page));
 
+  const fmt = (n) => n.toLocaleString("ru-RU");
+
+  async function shareUnknown(book) {
+    const text = book.stats.unknown.map(([w, n]) => `${w}\t${n}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("Список скопирован");
+    } catch {
+      const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "ember-unknown-words.txt" });
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
+  }
+
   function bookMenu(book) {
+    const st = book.stats;
+    const facts = st
+      ? [
+          ["Слов в тексте", fmt(st.tokens)],
+          ["Разных слов", fmt(st.unique)],
+          ["Словарь знает", `${Math.round(st.coverage * 100)}% текста`],
+          ["Фразовых глаголов", fmt(st.phrases.pv.unique)],
+          ["Идиом", fmt(st.phrases.id.unique)],
+          ["Не нашлось в словаре", `${fmt(st.uniqueUnknown)} разных слов`],
+        ]
+      : null;
     const sheet = openSheet({
       label: book.title,
       content: h(
         "div",
         null,
         h("h2", { class: "set-title" }, book.title),
+        facts
+          ? h("dl", { class: "facts" }, facts.map(([k, v]) => [h("dt", null, k), h("dd", null, v)]))
+          : h("p", { class: "note" }, app.analysis?.id === book.id ? "Анализ книги идёт…" : "Анализ книги появится через несколько секунд."),
+        st?.unknown?.length ? h("p", { class: "note" }, `Чаще всего не находятся: ${st.unknown.slice(0, 12).map(([w, n]) => `${w} (${n})`).join(", ")}.`) : null,
+        h(
+          "div",
+          { class: "set-actions" },
+          st?.unknown?.length ? h("button", { class: "btn quiet block", onClick: () => shareUnknown(book) }, "Скопировать список не найденных слов") : null,
+          h("button", { class: "btn danger block", onClick: async () => { await removeBook(book.id); sheet.close(); toast("Книга удалена"); } }, icon("trash", 20), "Удалить книгу"),
+        ),
         h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга и ваше место в ней."),
-        h("div", { class: "set-actions" }, h("button", { class: "btn danger block", onClick: async () => { await removeBook(book.id); sheet.close(); toast("Книга удалена"); } }, icon("trash", 20), "Удалить книгу")),
       ),
     });
+  }
+
+  function statLine(b) {
+    if (app.analysis?.id === b.id) return `Анализ книги: ${Math.round(app.analysis.pct * 100)}%`;
+    if (b.stats) return `Словарь знает ${Math.round(b.stats.coverage * 100)}% слов`;
+    return "";
   }
 
   function paint() {
@@ -90,7 +132,7 @@ export function renderLibrary(root) {
               "button",
               { class: "book-open", onClick: () => (location.hash = `#/read/${b.id}`) },
               cover(b),
-              h("div", { style: { minWidth: 0, flex: 1 } }, h("div", { class: "btitle" }, b.title), b.author && h("div", { class: "bauthor" }, b.author), h("div", { class: "bprog" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), `Глава ${p.ch + 1} из ${p.total}`)),
+              h("div", { style: { minWidth: 0, flex: 1 } }, h("div", { class: "btitle" }, b.title), b.author && h("div", { class: "bauthor" }, b.author), h("div", { class: "bprog" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), `Глава ${p.ch + 1} из ${p.total}`), h("div", { class: "bstat" }, statLine(b))),
             ),
             h("button", { class: "iconbtn", "aria-label": `Действия: ${b.title}`, onClick: () => bookMenu(b) }, icon("more", 22)),
           );

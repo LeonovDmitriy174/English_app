@@ -1,0 +1,46 @@
+# Публикация сайта на GitHub Pages при каждом пуше в main.
+# Что делает: подставляет в sw.js номер коммита (так телефон узнаёт, что вышла новая версия)
+# и выкладывает только файлы приложения, без .venv, tests, tools и data-src.
+#
+# Один раз включить: репозиторий на GitHub → Settings → Pages → Source: «GitHub Actions».
+name: Опубликовать приложение
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Собрать сайт
+        run: |
+          mkdir _site
+          cp -r index.html manifest.webmanifest sw.js css js data icons _site/
+          sed -i "s/__BUILD__/${GITHUB_SHA::7}/" _site/sw.js
+          if grep -q "__BUILD__" _site/sw.js; then echo "Маркер версии не заменён" && exit 1; fi
+          grep -n "const BUILD" _site/sw.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
