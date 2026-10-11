@@ -301,6 +301,7 @@ export function renderReader(root, bookId) {
       frag.append(el);
     }
     text.replaceChildren(frag);
+    if (!blocks.length) text.append(h("p", { class: "note noindent" }, "В этой главе нет текста. Это может быть титульный лист или страница с картинкой."));
     reanchor();
     mark();
     renderFlags();
@@ -332,9 +333,12 @@ export function renderReader(root, bookId) {
 
   function buildNav() {
     const last = book.chapters.length - 1;
+    // replaceChildren превращает false в слово «false», поэтому пустые места отфильтровываем
     chnav.replaceChildren(
-      chIdx > 0 && h("button", { class: "btn quiet", "aria-label": "Предыдущая глава", onClick: () => load(chIdx - 1) }, icon("back", 20)),
-      chIdx < last ? h("button", { class: "btn primary grow", onClick: () => load(chIdx + 1) }, "Следующая глава", icon("next", 20)) : h("p", { class: "note" }, "Это последняя глава."),
+      ...[
+        chIdx > 0 && h("button", { class: "btn quiet", "aria-label": "Предыдущая глава", onClick: () => load(chIdx - 1) }, icon("back", 20)),
+        chIdx < last ? h("button", { class: "btn primary grow", onClick: () => load(chIdx + 1) }, "Следующая глава", icon("next", 20)) : h("p", { class: "note" }, "Это последняя глава."),
+      ].filter(Boolean),
     );
   }
 

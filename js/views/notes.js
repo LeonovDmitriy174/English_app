@@ -143,7 +143,7 @@ export function renderNotes(root) {
           { class: "empty" },
           h("p", { class: "lead" }, "Заметок пока нет"),
           h("p", null, "Нажмите на флажок в верхней панели книги или коснитесь поля справа от абзаца, чтобы оставить закладку или комментарий. Все заметки соберутся здесь, и с любой из них можно вернуться к месту в книге."),
-          app.books.length && h("button", { class: "btn primary", onClick: () => (location.hash = "#/library") }, "К книгам"),
+          app.books.length > 0 && h("button", { class: "btn primary", onClick: () => (location.hash = "#/library") }, "К книгам"),
         ),
       );
       return;

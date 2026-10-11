@@ -1,8 +1,21 @@
 // epub.js — разбор EPUB в браузере: метаданные, оглавление, обложка, текст глав.
 import { openZip } from "./zip.js";
 
+/** Версия разбора EPUB. Книги, добавленные более ранней версией, при запуске разбираются заново (store.js). */
+export const EPUB_PARSER = 2;
+
 const xml = (s) => new DOMParser().parseFromString(s, "application/xml");
-const html = (s) => new DOMParser().parseFromString(s, "text/html");
+
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+/**
+ * Страницы EPUB написаны на XHTML, а читаем мы их HTML-разбором. Там самозакрытый тег — это открывающий:
+ * <title/>, <script src=".."/> или <style/> в заголовке «съедают» всю страницу, и глава оказывается пустой.
+ * Поэтому <имя .../> разворачиваем в <имя ...></имя> (пустые теги вроде <br/> и <img/> не трогаем).
+ */
+export function fixSelfClosing(src) {
+  return src.replace(/<([a-zA-Z][\w:.-]*)(\s[^<>]*?)?\s*\/>/g, (m, name, attrs = "") => (VOID.has(name.toLowerCase()) ? m : `<${name}${attrs}></${name}>`));
+}
+const html = (s) => new DOMParser().parseFromString(fixSelfClosing(s), "text/html");
 
 function resolve(base, href) {
   const clean = decodeURIComponent(href.split("#")[0]);
@@ -122,7 +135,14 @@ const isHeading = (el) => /^h[1-6]$/i.test(el.tagName) || /title|head|chapter/i.
 
 /** HTML главы → массив { kind: 'h' | 'p', el } с очищенной разметкой. */
 export function chapterBlocks(htmlText) {
-  const doc = html(htmlText);
+  const blocks = blocksOf(html(htmlText));
+  if (blocks.length) return blocks;
+  // Запасной путь: заголовок страницы мог быть разобран криво, а текст в самой странице есть. Разбираем без <head>.
+  const bodyOnly = htmlText.replace(/<head\b[\s\S]*?<\/head\s*>/i, "");
+  return bodyOnly.length < htmlText.length ? blocksOf(html(bodyOnly)) : blocks;
+}
+
+function blocksOf(doc) {
   const blocks = [];
   const push = (kind, nodes) => {
     const el = document.createElement(kind === "h" ? "h2" : "p");

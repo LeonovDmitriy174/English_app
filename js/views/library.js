@@ -68,7 +68,7 @@ export function renderLibrary(root) {
   }
 
   function bookMenu(book) {
-    const st = book.stats;
+    const st = book.stats?.tokens ? book.stats : null;
     const facts = st
       ? [
           ["Слов в тексте", fmt(st.tokens)],
@@ -87,7 +87,7 @@ export function renderLibrary(root) {
         h("h2", { class: "set-title" }, book.title),
         facts
           ? h("dl", { class: "facts" }, facts.map(([k, v]) => [h("dt", null, k), h("dd", null, v)]))
-          : h("p", { class: "note" }, app.analysis?.id === book.id ? "Анализ книги идёт…" : "Анализ книги появится через несколько секунд."),
+          : h("p", { class: "note" }, app.analysis?.id === book.id ? "Анализ книги идёт…" : book.stats ? "В этой книге не нашлось текста для разбора." : "Анализ книги появится через несколько секунд."),
         st?.unknown?.length ? h("p", { class: "note" }, `Чаще всего не находятся: ${st.unknown.slice(0, 12).map(([w, n]) => `${w} (${n})`).join(", ")}.`) : null,
         h(
           "div",
@@ -102,6 +102,7 @@ export function renderLibrary(root) {
 
   function statLine(b) {
     if (app.analysis?.id === b.id) return `Анализ книги: ${Math.round(app.analysis.pct * 100)}%`;
+    if (b.stats?.tokens === 0) return "В книге не нашлось текста";
     if (b.stats) return `Словарь знает ${Math.round(b.stats.coverage * 100)}% слов`;
     return "";
   }

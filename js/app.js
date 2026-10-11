@@ -1,6 +1,6 @@
 // app.js — запуск, маршруты и нижняя панель вкладок.
 import { h, icon, closeSheet } from "./dom.js";
-import { init, app, subscribe, queue, APP_NAME, ensureAnalysis } from "./store.js";
+import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, reparseBooks } from "./store.js";
 import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
@@ -78,7 +78,11 @@ async function start() {
   route();
 
   watchUpdates();
-  setTimeout(ensureAnalysis, 600); // разбор книг в фоне, когда экран уже открылся
+  // Фоновая работа, когда экран уже открылся: обновить разбор старых книг, затем проанализировать слова
+  setTimeout(async () => {
+    await reparseBooks();
+    ensureAnalysis();
+  }, 600);
 }
 
 // Офлайн-кэш и обновления. Новая версия скачивается сама, а перезапуск делаете вы, когда удобно.

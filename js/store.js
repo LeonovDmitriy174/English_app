@@ -1,7 +1,7 @@
 // store.js — состояние приложения: словарь, карточки, книги, настройки. Всё хранится на устройстве.
 import { db, requestPersistence } from "./db.js";
 import { Glossary, lemmaCandidates } from "./lex.js";
-import { readEpub } from "./epub.js";
+import { readEpub, EPUB_PARSER } from "./epub.js";
 import { openZip } from "./zip.js";
 import { analyzeBook, dictSignature } from "./analysis.js";
 import * as levels from "./levels.js";
@@ -176,6 +176,7 @@ export async function addBook(file) {
   const { meta, chapters, cover } = await readEpub(buf);
   const existing = app.books.find((b) => b.id === meta.id);
   if (existing) return { book: existing, duplicate: true };
+  if (chapters.reduce((sum, c) => sum + c.chars, 0) < 200) throw new Error("В этой книге не нашлось текста: возможно, её страницы это картинки.");
   const waiting = (await db.get("kv", "progress"))?.value || {};
   const book = {
     id: meta.id,
@@ -185,6 +186,7 @@ export async function addBook(file) {
     cover,
     progress: waiting[meta.id] || { ch: 0, p: 0 },
     added: Date.now(),
+    parser: EPUB_PARSER,
   };
   await db.put("files", { id: book.id, buf });
   await db.put("books", book);
@@ -273,6 +275,54 @@ export function jumpToNote(n) {
   saveProgress(n.book, n.ch, n.p);
   location.hash = `#/read/${n.book}`;
   return true;
+}
+
+/**
+ * Книги, добавленные более ранней версией разбора EPUB, читаем заново из сохранённого файла: так
+ * исправления разбора (например, пустые главы из-за <title/> в XHTML) достаются и уже загруженным книгам.
+ * Место в книге и заметки переезжают вместе с главами по адресу главы.
+ */
+export async function reparseBooks() {
+  let changed = false;
+  for (const b of [...app.books]) {
+    if ((b.parser || 1) >= EPUB_PARSER) continue;
+    try {
+      const rec = await db.get("files", b.id);
+      if (rec) {
+        const { chapters } = await readEpub(rec.buf);
+        const next = chapters.map(({ href, title, chars }) => ({ href, title, chars }));
+        const old = b.chapters;
+        const sameShape = next.length === old.length && next.every((c, i) => c.href === old[i].href);
+        const sameText = sameShape && next.every((c, i) => c.chars === old[i].chars);
+        if (!sameShape) {
+          const move = (i) => next.findIndex((c) => c.href === old[i]?.href);
+          const k = move(b.progress?.ch ?? 0);
+          b.progress = k >= 0 ? { ch: k, p: b.progress?.p || 0 } : { ch: 0, p: 0 };
+          let moved = false;
+          for (const n of app.notes) {
+            if (n.book !== b.id) continue;
+            const nk = move(n.ch);
+            if (nk >= 0 && nk !== n.ch) {
+              n.ch = nk;
+              moved = true;
+            }
+          }
+          if (moved) await persistNotes();
+        }
+        b.chapters = next;
+        if (!sameText) {
+          b.stats = undefined; // разбор по прежнему тексту устарел
+          namesCache.delete(b.id);
+        }
+      }
+      b.parser = EPUB_PARSER;
+      await db.put("books", b);
+      changed = true;
+    } catch {
+      /* не открылась: попробуем при следующем запуске */
+    }
+  }
+  if (changed) emit();
 }
 
 // ── Автоматический разбор книг ────────────────────────────────────────────

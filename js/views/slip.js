@@ -63,7 +63,7 @@ export function openSlip(opts) {
       !entry.ru && entry.rm && h("p", { class: "auto-note" }, "автоперевод определения, возможны неточности"),
       entry.en && h("p", { class: "def" }, entry.en),
       !entry.ru && !entry.rm && h("p", { class: "note" }, "Перевода на русский пока нет, только определение."),
-      entry.of?.length && h("p", { class: "meta via" }, `Может быть и формой слова: ${entry.of.join(", ")}`),
+      entry.of?.length > 0 && h("p", { class: "meta via" }, `Может быть и формой слова: ${entry.of.join(", ")}`),
       quote(ctx || saved?.ctx?.[0]),
       entry.ex && h("p", { class: "exl" }, h("small", null, "Пример"), entry.ex),
     );
