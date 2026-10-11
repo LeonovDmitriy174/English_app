@@ -1,0 +1,236 @@
+# Демо-словарь для глав 1-2 «Harry Potter and the Sorcerer's Stone».
+# Колонки: type | headword | pos | ru | en | example | patterns (;) | extra forms (;) | flags
+# type: w слово, pv фразовый глагол, id идиома/устойчивое выражение
+# patterns: токены через пробел; @ = притяжательное (my/his/…), * = любое одно слово; flags: sep = можно вставить слова внутрь
+# Идиомы и выражения
+id|get a move on|idiom|поторопиться, пошевеливаться|to hurry up|Get a move on, or we'll miss the bus.|||
+id|by way of|idiom|в качестве, в виде; вместо|as a form of something|He nodded by way of thanks.|||
+id|not to mention|idiom|не говоря уже о|and also; used to add something more important|It's too expensive, not to mention too big.|||
+id|make a difference|idiom|иметь значение, менять дело|to have an effect or importance|A good night's sleep makes a big difference.|make a difference;make no difference;make any difference;make much difference||
+id|for a change|idiom|для разнообразия, на этот раз|as something different from usual|Let's eat at home for a change.|||
+id|have a go|idiom|попробовать, попытаться (брит.)|to try to do something|Can I have a go on your bike?|have a go;have another go||
+id|in ruins|idiom|в руинах, в полном разгроме|badly damaged or destroyed|After the storm, the garden was in ruins.|||
+id|laugh oneself silly|idiom|хохотать до упаду|to laugh a lot|The children laughed themselves silly.|laugh * silly||
+id|to one's relief|idiom|к (чьему-то) облегчению|used to say that you feel less worried|To my relief, the test was easy.|to @ great relief;to @ relief||
+id|on the other hand|idiom|с другой стороны|used to give a different point of view|I like the flat. On the other hand, it's very small.|||
+id|as usual|idiom|как обычно|in the way that happens most often|As usual, the train was late.|||
+id|at once|idiom|сразу же, немедленно|immediately|Come here at once!|||
+id|funny business|idiom|проказы, тёмные делишки|dishonest or not allowed behaviour|The teacher warned them: no funny business.|||
+id|no good|idiom|бесполезно, нет смысла|useless; not worth doing|It's no good crying about it.|||
+id|as far as|idiom|насколько (мне известно / я вижу)|to the degree that|As far as I know, the shop is closed.|||
+id|over and over again|idiom|снова и снова|many times|She read the letter over and over again.|over and over again;over and over||
+id|at least|idiom|по крайней мере, хотя бы|not less than; used for the good side of a bad thing|At least it stopped raining.|||
+id|in fact|idiom|на самом деле|used to give more exact information|In fact, I've never been to London.|||
+id|all over the place|idiom|повсюду; в беспорядке|everywhere; in a messy way|His toys were all over the place.|||
+id|heart gives a leap|idiom|сердце подпрыгнуло (от радости)|to feel a sudden strong happiness or excitement|My heart gave a leap when I saw her.|heart give a leap;heart leap||
+id|on the way to|idiom|по дороге в / к|while travelling to a place|I met him on the way to school.|||
+id|no matter|idiom|неважно; независимо от того|it does not change anything|No matter what happens, call me.|||
+id|by the time|idiom|к тому времени как|before or when something happens|By the time we arrived, the film had started.|||
+id|in the mood|idiom|в настроении|wanting to do something|I'm not in the mood for pizza.|||
+id|all sorts of|idiom|всевозможные, разные|many different kinds of|There were all sorts of animals at the zoo.|||
+id|the other day|idiom|на днях, недавно|a few days ago|I saw her the other day.|||
+id|without a word|idiom|не говоря ни слова|silently|He left without a word.|||
+id|on vacation|idiom|в отпуске|having a holiday|They are on vacation in Spain.|on vacation;on holiday||
+id|be used to|idiom|привыкнуть к; быть привычным к|to be familiar with something|I'm used to getting up early.|be used to;used to||
+id|have something to do with|idiom|иметь отношение к|to be connected with|Her job has something to do with computers.|have something to do with||
+id|as though|idiom|как будто, словно|in a way that suggests something|He talks as though he knows everything.|as though;as if||
+id|at the moment|idiom|в данный момент|now|I'm busy at the moment.|at the moment;at that moment||
+id|ever since|idiom|с тех пор как|from that time until now|I've loved music ever since I was a child.|||
+id|out of the way|idiom|в стороне; с дороги|not blocking a path|Please move out of the way.|||
+id|as long as|idiom|сколько; пока; при условии что|for the whole time that|He has lived here as long as I can remember.|||
+id|tired of|idiom|уставший от, которому надоело|bored with or annoyed by something|I'm tired of waiting.|||
+id|full of|idiom|полный (чего-то)|containing a lot of something|The box was full of old photos.|||
+id|ought to|idiom|следует, должен|used to say what is right or sensible|You ought to see a doctor.|||
+id|get into trouble|idiom|попасть в неприятности|to be punished or to have problems|He got into trouble for being late.|get into trouble;get into * trouble||
+id|go wrong|idiom|пойти не так|to fail or make a mistake|Everything went wrong that day.|||
+# Фразовые глаголы
+pv|look after|pv|присматривать за, заботиться о|to take care of someone or something|Can you look after my cat this weekend?|||
+pv|look like|pv|выглядеть как, быть похожим на|to have a similar appearance to|She looks like her mother.|||
+pv|get up|pv|вставать (с постели)|to leave your bed|I get up at seven.|||sep
+pv|turn over|pv|переворачивать(ся)|to move so the other side is up|Turn the page over.|||sep
+pv|put on|pv|надевать; включать; ставить (на плиту)|to wear something / to start a machine|Put on your coat. It's cold.|||sep
+pv|pull off|pv|стащить, сорвать|to remove something with force|He pulled off his boots.|||sep
+pv|light up|pv|освещать, озарять|to fill a place with light|The fireworks lit up the sky.|||sep
+pv|wolf down|pv|жадно проглотить|to eat very quickly|He wolfed down his lunch.|||sep
+pv|come on|pv|надвигаться, начинаться|to begin to happen or develop|I think a cold is coming on.|||
+pv|sit down|pv|садиться|to move to a sitting position|Please sit down.|||
+pv|sit up|pv|приподняться, сесть прямо|to move from lying to sitting|She sat up in bed.|||
+pv|take out|pv|водить куда-то, приглашать; доставать|to go somewhere with someone / to remove|He took her out for dinner.|||sep
+pv|leave behind|pv|оставить позади|to not take someone or something with you|They left the dog behind.|||sep
+pv|fall back on|pv|прибегнуть к, положиться на|to use something when other things fail|When the plan failed, we fell back on the old method.|||
+pv|come up with|pv|придумать, предложить|to think of an idea or plan|She came up with a great idea.|||
+pv|think of|pv|придумать; вспомнить; думать о|to have an idea; to remember|I can't think of her name.|||
+pv|blow up|pv|взорвать(ся); надуть|to destroy with a bomb / to fill with air|They blew up the old bridge.|||sep
+pv|screw up|pv|скривить, сморщить; напортачить|to twist your face; to make a mistake|He screwed up his face at the taste.|||sep
+pv|take aside|pv|отвести в сторону|to lead someone away to talk privately|The teacher took me aside after class.|||sep
+pv|take away|pv|забрать, увести; убрать|to remove or carry off|The waiter took away the plates.|||sep
+pv|put in|pv|вставить (реплику); вложить; установить|to say something in a conversation / to install|“Me too,” she put in.|||sep
+pv|grow back|pv|отрастать заново|to grow again after being cut|My hair has grown back.|||
+pv|calm down|pv|успокоиться|to become quiet and relaxed|Calm down and tell me what happened.|||
+pv|come back|pv|возвращаться|to return|Come back soon!|||
+pv|read on|pv|читать дальше|to continue reading|Read on to find out more.|||
+pv|look around|pv|оглядеться|to look at things near you|She looked around the room.|||
+pv|wake up|pv|просыпаться; будить|to stop sleeping / to make someone stop sleeping|I woke up at six.|||sep
+pv|look for|pv|искать|to try to find|I'm looking for my keys.|||
+pv|come from|pv|происходить, быть родом из|to start in or be born in a place|Where do you come from?|||
+pv|dream of|pv|мечтать о|to hope for something very much|She dreams of becoming a pilot.|||
+pv|hold together|pv|скреплять, держаться вместе|to keep parts joined|The box is held together with tape.|||sep
+# Слова
+w|nephew|n|племянник|the son of your brother or sister|My nephew starts school next year.|||
+w|tidy|adj|аккуратный, опрятный|clean and in good order|She keeps her desk very tidy.|||
+w|brass|n|латунь; медный|a shiny yellow metal|The door has a brass handle.|||
+w|creep|v|ползти, красться|to move slowly and quietly|The cat crept towards the bird.|||
+w|fateful|adj|роковой, судьбоносный|having an important effect on what happens later|It was a fateful meeting.|||
+w|mantelpiece|n|каминная полка|the shelf above a fireplace|Cards stood on the mantelpiece.|||
+w|bonnet|n|чепчик; (брит.) капот|a soft hat for a baby tied under the chin|The baby wore a little bonnet.|||
+w|carousel|n|карусель|a fairground ride with horses that go round|The children rode the carousel.|||
+w|fair|n|ярмарка, парк аттракционов|an outdoor event with rides and games|We went to the fair on Saturday.|||
+w|hug|v|обнимать|to hold someone tightly in your arms|She hugged her little brother.|||
+w|shrill|adj|пронзительный, визгливый|high and unpleasant to listen to|A shrill whistle made us jump.|||
+w|screech|v|визжать; скрипеть (о тормозах)|to make a loud, high, unpleasant sound|The brakes screeched.|||
+w|rap|v|стукнуть, постучать|to hit something quickly and sharply|He rapped on the door.|||
+w|frying pan|n|сковорода|a flat pan used for frying food|Heat some oil in the frying pan.|||
+w|stove|n|плита|a cooker with places to heat pans|The soup is on the stove.|||
+w|demand|v|требовать|to ask for something in a strong way|“Where is my phone?” he demanded.|||
+w|groan|v|стонать|to make a low sound of pain or annoyance|He groaned when he saw the test.|||
+w|snap|v|огрызнуться; щёлкнуть|to speak in a sudden, angry way|“Leave me alone!” she snapped.|||
+w|sock|n|носок|a soft cover for your foot|I can't find my other sock.|||
+w|cupboard|n|шкаф; чулан|a piece of furniture or a small room for storing things|The plates are in the cupboard.|||
+w|punch|v|ударить кулаком|to hit someone or something with your fist|He punched the bag hard.|||
+w|punching bag|n|боксёрская груша|a heavy bag that boxers hit|He hit the punching bag for an hour.|||
+w|skinny|adj|тощий, худой|very thin, often too thin|The skinny dog was looking for food.|||
+w|knobbly|adj|узловатый, костлявый|covered with small hard lumps|He has knobbly knees.|||
+w|scar|n|шрам|a mark left on the skin after a wound|He has a scar on his chin.|||
+w|forehead|n|лоб|the part of the face above the eyes|She wiped her forehead.|||
+w|bolt|n|молния (зигзаг); засов; болт|a flash of lightning; a metal bar for a door|A bolt of lightning hit the tree.|||
+w|lightning|n|молния|a flash of bright light in the sky during a storm|Lightning struck the old tree.|||
+w|scotch tape|n|скотч, липкая лента|clear sticky tape (US)|I fixed the page with Scotch tape.|||
+w|bark|v|гавкать; рявкнуть|to say something in a loud, rough voice|“Sit down!” the officer barked.|||
+w|haircut|n|стрижка|the act of cutting your hair|You need a haircut.|||
+w|barber|n|парикмахер (мужской)|a person who cuts men's hair|My father goes to the barber every month.|||
+w|ruffle|v|взъерошить|to make hair untidy with your hand|He ruffled the boy's hair.|||
+w|chuckle|v|тихо смеяться, посмеиваться|to laugh quietly|She chuckled at the joke.|||
+w|tantrum|n|истерика, вспышка гнева|a sudden angry outburst, especially by a child|The little girl threw a tantrum.|||
+w|parcel|n|свёрток, посылка|something wrapped in paper to be sent or given|A parcel came for you today.|||
+w|unwrap|v|распаковывать, разворачивать|to take off the paper around something|She unwrapped the present.|||
+w|rip|v|рвать, сдирать|to tear something quickly|He ripped the paper off the box.|||
+w|wristwatch|n|наручные часы|a small watch worn on the wrist|He wears a gold wristwatch.|||
+w|jerk|v|резко дёрнуть|to move suddenly and sharply|She jerked her head towards the door.|||
+w|cabbage|n|капуста|a round green vegetable|The kitchen smelled of cabbage.|||
+w|slug|n|слизень|a small soft animal like a snail without a shell|There is a slug on the lettuce.|||
+w|vacation|n|отпуск; каникулы (США)|a holiday (American English)|We are on vacation in July.|||
+w|snarl|v|рычать; злобно сказать|to speak in an angry way|“Go away!” he snarled.|||
+w|wail|v|вопить, причитать|to cry out loudly|The baby wailed all night.|||
+w|pretend|v|притворяться|to act as if something is true when it is not|He pretended to be asleep.|||
+w|sob|n|всхлип, рыдание|a sound you make when crying hard|Her sobs filled the room.|||
+w|gap|n|промежуток, щель|an empty space between two things|He looked through the gap in the fence.|||
+w|grin|n|ухмылка, широкая улыбка|a big smile|He gave me a wide grin.|||
+w|scrawny|adj|тощий, костлявый|thin and weak-looking|A scrawny cat sat by the bins.|||
+w|rat|n|крыса|a small animal like a large mouse|A rat ran across the road.|||
+w|frantic|adj|неистовый; обезумевший от тревоги|wild and anxious|She made a frantic phone call.||frantically|
+w|honest|adj|честный; искренний|telling the truth|He gave an honest answer.||honestly|
+w|fit|v|подходить по размеру|to be the right size|The shoes don't fit me.|||
+w|shrink|v|садиться (о ткани); уменьшаться|to become smaller|My sweater shrank in the wash.|||
+w|revolting|adj|отвратительный|extremely unpleasant|The soup tasted revolting.|||
+w|sweater|n|свитер|a warm knitted top|He wore a blue sweater.|||
+w|puppet|n|кукла (на руку или на нитках)|a toy that you move with your hand or strings|The children loved the puppet show.|||
+w|punish|v|наказывать|to make someone suffer for doing wrong|Nobody was punished.|||
+w|chimney|n|дымовая труба|a tall pipe that lets smoke out of a house|Smoke rose from the chimney.|||
+w|headmistress|n|директриса школы (брит.)|a woman who runs a school|The headmistress called his parents.|||
+w|trash can|n|мусорный бак (США)|a container for rubbish|Put it in the trash can.|||
+w|hoodlum|n|хулиган, бандит (разг., США)|a violent young criminal|Hoodlums broke the window.|||
+w|overtake|v|обгонять|to pass a moving vehicle|The bus overtook a bicycle.|||
+w|crash|n|авария, столкновение|an accident in which a vehicle hits something|He was hurt in a car crash.|||
+w|beet|n|свёкла|a round dark red root vegetable|Beet soup is red.|||
+w|mustache|n|усы (США)|hair that grows above the lip|He has a thick mustache.|||
+w|snigger|v|хихикать (с издёвкой)|to laugh quietly in a rude way|The boys sniggered behind her back.|||
+w|crowded|adj|переполненный людьми|full of people|The bus was crowded.|||
+w|entrance|n|вход|the place where you go in|Meet me at the entrance.|||
+w|lick|v|лизать|to move your tongue over something|The dog licked my hand.|||
+w|remarkable|adj|замечательный, поразительный|unusual and surprising|She made a remarkable recovery.||remarkably|
+w|reptile|n|рептилия|an animal like a snake or lizard|Snakes are reptiles.|||
+w|lizard|n|ящерица|a small reptile with four legs and a long tail|A lizard sat on the warm stone.|||
+w|crawl|v|ползти|to move on hands and knees or very slowly|The baby crawled across the floor.|||
+w|slither|v|скользить, ползти (о змее)|to move smoothly along the ground like a snake|A snake slithered into the grass.|||
+w|poisonous|adj|ядовитый|containing poison|Some mushrooms are poisonous.|||
+w|crush|v|раздавить, смять|to press something hard so that it breaks|The box was crushed under the car.|||
+w|coil|n|кольцо, виток|a shape made by winding something round|The snake lay in a coil.|||
+w|glisten|v|блестеть (о мокром)|to shine because of being wet|The road glistened after the rain.|||
+w|whine|v|ныть, скулить|to complain in an annoying, high voice|The child whined all the way home.|||
+w|budge|v|сдвинуться с места; уступить|to move a little|The door wouldn't budge.|||
+w|tap|v|постучать, слегка ударить|to hit lightly|She tapped me on the shoulder.|||
+w|snooze|v|дремать|to sleep lightly for a short time|Grandpa snoozed in his chair.|||
+w|shuffle|v|шаркать|to walk without lifting your feet|He shuffled out of the room.|||
+w|tank|n|аквариум, террариум; цистерна|a large container for liquid or animals|There are fish in the tank.|||
+w|intent|adj|пристальный; сосредоточенный|showing strong attention|She watched him with an intent look.||intently|
+w|drum|v|барабанить (пальцами)|to hit again and again|He drummed his fingers on the table.|||
+w|disturb|v|беспокоить, мешать|to interrupt someone|Please do not disturb me.|||
+w|hammer|v|колотить, стучать|to hit hard and again and again|Someone was hammering on the door.|||
+w|beady|adj|блестящий, как бусинки (о глазах)|small, round and bright|The bird had beady eyes.|||
+w|wink|v|подмигнуть|to close one eye quickly|She winked at me.|||
+w|jab|v|ткнуть, тыкать|to push something sharp quickly|He jabbed the map with his finger.|||
+w|sign|n|табличка, знак|a board with information|Read the sign by the door.|||
+w|murmur|v|бормотать, говорить тихо|to speak very quietly|“Good night,” she murmured.|||
+w|vigorous|adj|энергичный, сильный|strong and full of energy|He gave a vigorous nod.||vigorously|
+w|nod|v|кивать|to move your head up and down|She nodded and smiled.|||
+w|specimen|n|образец, экземпляр|an example of an animal or plant|The museum has a rare specimen.|||
+w|breed|v|разводить; выращивать|to keep animals to produce young|They breed horses.|||
+w|deafening|adj|оглушительный|so loud that you cannot hear anything else|A deafening noise filled the hall.|||
+w|waddle|v|ходить вперевалку|to walk with short steps, swaying|The duck waddled across the road.|||
+w|concrete|n|бетон|a hard grey building material|The floor is made of concrete.|||
+w|rib|n|ребро|one of the curved bones in your chest|He broke a rib.|||
+w|leap|v|прыгнуть, подскочить|to jump high or far|The cat leapt onto the wall.|||
+w|howl|n|вой, вопль|a long loud cry|We heard the howl of a wolf.|||
+w|gasp|v|ахнуть, судорожно вдохнуть|to breathe in sharply because of surprise|She gasped when she saw the room.|||
+w|vanish|v|исчезнуть|to disappear suddenly|The rabbit vanished from the box.|||
+w|uncoil|v|распрямиться, раскручиваться|to straighten out from a coil|The snake slowly uncoiled.|||
+w|rapid|adj|быстрый|happening very quickly|There was a rapid change in the weather.||rapidly|
+w|exit|n|выход|the way out of a place|The exit is on the left.|||
+w|swift|adj|быстрый, стремительный|moving or happening fast|She gave a swift reply.||swiftly|
+w|hiss|v|шипеть|to make a long “s” sound|The snake hissed at us.|||
+w|keeper|n|смотритель, хранитель|a person who looks after animals or a place|The keeper feeds the lions.|||
+w|gibber|v|невнятно бормотать (от страха)|to talk quickly in a way that is hard to understand|He was gibbering with fear.|||
+w|heel|n|пятка; каблук|the back part of your foot|The dog bit his heel.|||
+w|squeeze|v|сжимать, давить|to press something firmly|She squeezed my hand.|||
+w|swear|v|клясться; ругаться|to promise strongly; to use rude words|I swear I didn't tell anyone.|||
+w|collapse|v|рухнуть, упасть без сил|to fall down suddenly|He collapsed on the sofa.|||
+w|brandy|n|бренди, коньяк|a strong alcoholic drink made from wine|He poured a glass of brandy.|||
+w|miserable|adj|несчастный; убогий|very unhappy|It was a cold, miserable day.|||
+w|strain|v|напрягать(ся)|to try very hard|She strained to hear the voice.|||
+w|blinding|adj|ослепительный|so bright that you cannot see|A blinding light filled the room.|||
+w|forbid|v|запрещать|to say that something must not be done|Smoking is forbidden here.|||
+w|bald|adj|лысый|having no hair on the head|My uncle is going bald.|||
+w|weird|adj|странный, жутковатый|very strange|I had a weird dream last night.|||
+w|wave|v|махать (рукой)|to move your hand to say hello or goodbye|She waved from the window.|||
+w|merry|adj|весёлый, радостный|cheerful and happy|They sang a merry song.||merrily|
+w|violet|adj|фиолетовый|a purple colour|She wore a violet scarf.|||
+w|bow|v|поклониться|to bend forward as a greeting|He bowed to the queen.|||
+w|rush|v|спешить, бросаться|to move or do something very quickly|She rushed out of the house.|||
+w|odd|adj|странный|different from what is usual|It's odd that he didn't call.|||
+w|baggy|adj|мешковатый, свободный|loose and wide|He wore baggy jeans.|||
+w|stranger|n|незнакомец|a person you do not know|Don't talk to strangers.|||
+w|relation|n|родственник|a member of your family|We have relations in Canada.|||
+w|tiny|adj|крошечный|very small|A tiny spider sat on the wall.|||
+w|wild|adj|дикий; безумный|living in nature; not controlled|Wild horses ran across the field.|||
+w|wig|n|парик|a covering of false hair for the head|The actor wore a long wig.|||
+w|darling|n|дорогой, дорогая|a word for someone you love|Thank you, darling.|||
+w|suppose|v|предполагать, полагать|to think that something is probably true|I suppose you're right.|||
+w|furious|adj|взбешённый|extremely angry|She was furious with him.||furiously|
+w|spoil|v|портить; баловать|to ruin something|Don't spoil the surprise.|||
+w|mad|adj|сумасшедший; (США) злой|crazy; angry (US)|You must be mad to go out in this storm.|||
+w|sleepless|adj|бессонный|without sleep|He spent a sleepless night.|||
+w|imagine|v|представлять себе|to make a picture in your mind|Imagine you are on a beach.|||
+w|bangs|n|чёлка (США)|hair cut short across the forehead|She cut her bangs.|||
+w|owl|n|сова|a night bird with large eyes|An owl sat in the tree.|||
+w|scent|v|почуять, учуять|to notice something by smell or feeling|The dog scented a rabbit.|||
+w|fling|v|швырнуть, бросить|to throw something with force|She flung her coat on the chair.|||
+w|yell|v|орать, кричать|to shout very loudly|The coach yelled at the players.|||
+w|complain|v|жаловаться|to say that you are not happy about something|He always complains about the food.|||
+w|grab|v|схватить|to take something suddenly|She grabbed her bag and ran.|||
+w|wrap|v|обернуть, завернуть|to cover something with paper or cloth|He wrapped the gift in blue paper.|||
+w|peer|v|всматриваться, вглядываться|to look closely at something|She peered through the window.|||
+w|stare|v|пристально смотреть, пялиться|to look at something for a long time|Don't stare at people.|||
+w|swallow|v|глотать, проглотить|to move food down your throat|He swallowed the pill with water.|||
+w|nasty|adj|неприятный, мерзкий|very unpleasant|That's a nasty cut on your hand.|||
+w|silly|adj|глупый, дурацкий|not sensible|Don't be silly!|||
+w|thin|adj|тонкий; худой|not thick or fat|She has a thin face.|||
