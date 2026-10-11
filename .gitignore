@@ -14,3 +14,4 @@ data-src/cache/
 *.jsonl
 *.jsonl.gz
 *.part
+!data-src/mt-ru.jsonl

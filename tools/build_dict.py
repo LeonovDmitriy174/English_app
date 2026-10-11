@@ -41,6 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PSV = ROOT / "data-src" / "glossary.psv"
 OUT = ROOT / "data" / "dict.json"
 DEFAULT_CACHE = Path.home() / ".ember-cache"
+MT_CACHE = ROOT / "data-src" / "mt-ru.jsonl"  # переводы определений, сделанные tools/translate_glosses.py
 DUMP_URL = "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz"
 DUMP_NAME = "raw-wiktextract-data.jsonl.gz"
 ENGLISH_NAME = "english-entries.jsonl.gz"
@@ -292,6 +293,64 @@ def patterns(head: str, pos: str = "") -> list[str] | None:
         if s not in out:
             out.append(s)
     return out[:4] or None
+
+
+# ── Автоперевод определений ────────────────────────────────────────────────
+# У многих записей Викисловаря нет русского перевода. Для них tools/translate_glosses.py переводит
+# английское определение офлайн-моделью, а результат лежит в data-src/mt-ru.jsonl (строка на определение:
+# {"en": …, "ru": …}). Сборщик подставляет его в поле «rm». Приложение показывает его с пометкой «автоперевод».
+def mt_source(gloss: str) -> str:
+    """Что подаём модели: определение с заглавной буквы, без точки в конце."""
+    g = " ".join(gloss.split()).rstrip(".")
+    return g[:1].upper() + g[1:]
+
+
+def mt_clean(out: str) -> str:
+    """Ответ модели -> строчное определение без точки («Внезапная вспышка.» -> «внезапная вспышка»)."""
+    t = " ".join(out.split()).rstrip(".")
+    t = re.sub(r"^[Чч]тобы\s+", "", t)
+    if len(t) > 1 and t[0].isupper() and not t[1].isupper():
+        t = t[0].lower() + t[1:]
+    return t
+
+
+def mt_ok(src: str, out: str) -> bool:
+    """Отсев явно плохих ответов модели: пустые, не по-русски, слишком длинные, зацикленные."""
+    if not out or not CYRILLIC.search(out):
+        return False
+    if len(re.findall(r"[A-Za-z]", out)) > len(re.findall(r"[А-Яа-яЁё]", out)):
+        return False
+    if len(out) > 3 * len(src) + 20:
+        return False
+    words = out.lower().split()
+    for n in (1, 2, 3):
+        for i in range(len(words) - 3 * n + 1):
+            if words[i : i + n] == words[i + n : i + 2 * n] == words[i + 2 * n : i + 3 * n]:
+                return False
+    return True
+
+
+def load_mt(path: Path = MT_CACHE) -> dict[str, str]:
+    """Кэш переводов: определение -> русский текст («» означает, что перевод отбракован)."""
+    out: dict[str, str] = {}
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                o = json.loads(line)
+                out[o["en"]] = o["ru"]
+            except (ValueError, KeyError, TypeError):
+                continue
+    return out
+
+
+def apply_mt(entries: list[dict], mt: dict[str, str]) -> int:
+    """Записям без русского перевода добавляет поле rm. Возвращает, сколько записей получили перевод."""
+    n = 0
+    for e in entries:
+        if not e.get("ru") and e.get("en") and mt.get(e["en"]):
+            e["rm"] = mt[e["en"]]
+            n += 1
+    return n
 
 
 # ── Сборка ─────────────────────────────────────────────────────────────────
@@ -645,12 +704,13 @@ def locate_source(args) -> Path:
 
 def report(b: Builder, entries: list[dict], out: Path) -> None:
     by = Counter(e["t"] for e in entries)
-    no_ru = Counter(e["t"] for e in entries if not e.get("ru"))
+    no_ru = Counter(e["t"] for e in entries if not e.get("ru") and not e.get("rm"))
+    auto = Counter(e["t"] for e in entries if not e.get("ru") and e.get("rm"))
     size = out.stat().st_size
     print(f"\nГотово: {len(entries):,} записей → {out}  ({size / 2**20:.1f} МБ)")
     names = {"w": "слов", "pv": "фразовых глаголов", "id": "идиом и выражений"}
     for t in TYPES:
-        print(f"  {names[t]:<20} {by[t]:>7,}   без русского перевода: {no_ru[t]:,}")
+        print(f"  {names[t]:<20} {by[t]:>7,}   автоперевод определения: {auto[t]:,}   совсем без перевода: {no_ru[t]:,}")
     if b.stats["entries"]:
         print(f"Просмотрено английских статей: {b.stats['entries']:,}")
         if not by["pv"] or not by["id"]:
@@ -678,6 +738,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-freq", action="store_true", help="не использовать wordfreq (только для проверки)")
     ap.add_argument("--no-fixed-phrases", action="store_true", help="не брать устойчивые обороты вроде «at least», если они не помечены как идиомы")
     ap.add_argument("--limit", type=int, help="остановиться после N английских статей (для проверки)")
+    ap.add_argument("--no-mt", action="store_true", help="не подставлять переводы определений из data-src/mt-ru.jsonl")
     ap.add_argument("--probe", nargs="+", metavar="СЛОВО", help="показать, как указанные слова выглядят в данных")
     ap.add_argument("--out", type=Path, default=OUT)
     args = ap.parse_args(argv)
@@ -704,6 +765,11 @@ def main(argv=None) -> int:
                 break
         print(f"  принято к разбору: {len(builder.acc):,}", file=sys.stderr)
     entries = builder.finish(hand)
+    if not args.no_mt:
+        mt = load_mt(MT_CACHE)
+        got = apply_mt(entries, mt)
+        if mt:
+            print(f"  переводов определений подставлено: {got:,} (в кэше {len(mt):,})", file=sys.stderr)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(entries, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     if args.wiktionary:

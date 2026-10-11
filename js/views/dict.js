@@ -89,7 +89,7 @@ export function renderDict(root) {
     }
     const now = Date.now();
     const items = [...app.cards.values()]
-      .filter((c) => (filter === "all" || c.t === filter) && (!query || c.w.toLowerCase().includes(query) || (c.ru || c.en || "").toLowerCase().includes(query)))
+      .filter((c) => (filter === "all" || c.t === filter) && (!query || c.w.toLowerCase().includes(query) || (c.ru || c.rm || c.en || "").toLowerCase().includes(query)))
       .sort((a, b) => b.added - a.added);
     if (!items.length) {
       list.replaceChildren(h("p", { class: "note" }, "Ничего не найдено."));
@@ -108,7 +108,7 @@ export function renderDict(root) {
               "button",
               { class: `row ${kindClass(c.t)}`, onClick: () => openSlip({ entry: c, surface: c.w, onChange: () => {} }) },
               h("span", { class: "row-mark" }),
-              h("div", { class: "row-main" }, h("div", { class: "row-hw" }, c.w), h("div", { class: "row-ru" }, c.ru || c.en)),
+              h("div", { class: "row-main" }, h("div", { class: "row-hw" }, c.w), h("div", { class: "row-ru" }, c.ru || c.rm || c.en)),
               h("span", { class: `row-due${st.hot ? " now" : ""}` }, st.bar || st.text),
             ),
           );

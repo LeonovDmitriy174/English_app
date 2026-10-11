@@ -186,7 +186,7 @@ export function renderReview(root) {
   }
 
   function answerBlock(card) {
-    return [card.ru && h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
+    return [card.ru ? h("p", { class: "ru" }, card.ru) : card.rm && h("p", { class: "ru auto" }, card.rm), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
   }
 
   /** Записывает ответ и ведёт сессию дальше. Время и уровень пользователю не показываются, кроме индикатора. */
@@ -264,8 +264,8 @@ export function renderReview(root) {
         "div",
         { class: "rv-body" },
         h("p", { class: "meta" }, posLabel(card)),
-        h("p", { class: "ru", style: { fontSize: "28px", marginTop: "10px" } }, card.ru || card.en),
-        card.ru && card.en && h("p", { class: "def" }, card.en),
+        h("p", { class: "ru", style: { fontSize: "28px", marginTop: "10px" } }, card.ru || card.rm || card.en),
+        (card.ru || card.rm) && card.en && h("p", { class: "def" }, card.en),
         hint,
         h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
         h("div", { style: { display: "flex", gap: "20px" } }, showHint, give),
@@ -307,7 +307,7 @@ export function renderReview(root) {
         { class: "rv-body" },
         h("p", { class: "meta" }, posLabel(card)),
         h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("span", { class: "blank", "aria-label": "пропуск" }), ctx.s.slice(ctx.b)),
-        h("p", { class: "rv-hint" }, `Подсказка: ${card.ru || card.en}`),
+        h("p", { class: "rv-hint" }, `Подсказка: ${card.ru || card.rm || card.en}`),
         h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
         h("div", null, give),
       ),
@@ -336,7 +336,7 @@ export function renderReview(root) {
           h("p", { class: "meta" }, posLabel(card)),
           h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("mark", null, expected), ctx.s.slice(ctx.b)),
           fb,
-          h("div", { style: { marginTop: "6px" } }, h("h2", { class: "hw" }, card.w), card.ru && h("p", { class: "ru" }, card.ru), card.en && h("p", { class: "def" }, card.en), h("p", { class: "meta lvl-line" }, levelBar(res.after, res.after > res.before))),
+          h("div", { style: { marginTop: "6px" } }, h("h2", { class: "hw" }, card.w), (card.ru ? h("p", { class: "ru" }, card.ru) : card.rm && h("p", { class: "ru auto" }, card.rm)), card.en && h("p", { class: "def" }, card.en), h("p", { class: "meta lvl-line" }, levelBar(res.after, res.after > res.before))),
         ),
         nextBtn(),
       );

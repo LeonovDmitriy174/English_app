@@ -50,6 +50,15 @@ export async function init() {
       delete c.fsrs;
       await db.put("cards", c);
     }
+    if (!c.ru && !c.rm && !c.custom) {
+      // слово добавлено, когда перевода ещё не было: берём то, что появилось в словаре с тех пор
+      const e = app.glossary.byId.get(c.id);
+      if (e && (e.ru || e.rm)) {
+        c.ru = e.ru || "";
+        c.rm = e.ru ? "" : e.rm || "";
+        await db.put("cards", c);
+      }
+    }
     app.cards.set(c.id, c);
   }
   app.books = books.sort((a, b) => (b.opened || b.added) - (a.opened || a.added));
@@ -95,6 +104,7 @@ export async function saveCard(entry, ctx) {
       t: entry.t,
       pos: entry.pos || "",
       ru: entry.ru || "",
+      rm: entry.ru ? "" : entry.rm || "",
       en: entry.en || "",
       ex: entry.ex || "",
       custom: !!entry.custom,
