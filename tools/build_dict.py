@@ -622,16 +622,20 @@ def make_zipf(disabled: bool):
 
 def locate_source(args) -> Path:
     cache = args.cache
+    english = cache / ENGLISH_NAME
+    raw = cache / DUMP_NAME
     if args.source:
         if not args.source.exists():
             raise SystemExit(f"Файл не найден: {args.source}")
-        return args.source
-    english = cache / ENGLISH_NAME
+        # Полный дамп (десятки ГБ) разбираем один раз и запоминаем английские статьи; маленький файл читаем напрямую
+        if args.source.name.startswith("raw-wiktextract") or args.source.stat().st_size > 2**30:
+            raw = args.source
+        else:
+            return args.source
     if args.refresh and english.exists():
         english.unlink()
     if english.exists():
         return english
-    raw = cache / DUMP_NAME
     if not raw.exists():
         download(DUMP_URL, raw)
     print("Один проход по дампу, нужно подождать…", file=sys.stderr)
