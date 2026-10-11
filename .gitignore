@@ -15,3 +15,7 @@ data-src/cache/
 *.jsonl.gz
 *.part
 !data-src/mt-ru.jsonl
+
+# каталог встроенных книг и обложки собираются из самих EPUB (tools/build_catalog.py), в репозиторий не кладутся
+books/catalog.json
+books/covers/

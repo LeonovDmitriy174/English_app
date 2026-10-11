@@ -6,6 +6,7 @@ import { openZip } from "./zip.js";
 import { analyzeBook, dictSignature } from "./analysis.js";
 import * as levels from "./levels.js";
 import { newNote, noteAt, mergeNotes } from "./notes.js";
+import { sanitizeCatalog, cleanName, nameTaken, newGroupId, toggleMembership, isUserGroup, reconcileGroups, mergeGroups } from "./shelf.js";
 
 export const APP_NAME = "Ember Chronicle";
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
@@ -19,6 +20,10 @@ export const app = {
   analysis: null, // { id, pct } пока идёт разбор книги
   notes: [], // заметки и закладки к книгам (js/notes.js)
   jump: null, // { id } заметка, к которой читалка должна перейти при открытии
+  groups: [], // свои группы книг: [{ id: "u-…", name, created }]
+  catalog: { groups: [], books: [] }, // встроенные книги из books/catalog.json (js/shelf.js)
+  catalogLoaded: false, // каталог получен из сети или из сохранённой копии
+  downloading: new Set(), // id книг каталога, которые скачиваются сейчас
 };
 
 const listeners = new Set();
@@ -45,8 +50,13 @@ export async function init() {
   } catch {
     app.glossary = new Glossary([]);
   }
-  const [cards, books, kvSettings, kvDaily, kvNotes] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily"), db.get("kv", "notes")]);
+  const [cards, books, kvSettings, kvDaily, kvNotes, kvGroups, kvCatalog] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily"), db.get("kv", "notes"), db.get("kv", "groups"), db.get("kv", "catalog")]);
   app.notes = Array.isArray(kvNotes?.value) ? kvNotes.value : [];
+  app.groups = (Array.isArray(kvGroups?.value) ? kvGroups.value : []).filter((g) => isUserGroup(g?.id) && cleanName(g.name));
+  if (kvCatalog?.value) {
+    app.catalog = sanitizeCatalog(kvCatalog.value);
+    app.catalogLoaded = true;
+  }
   for (const c of cards) {
     if (!c.srs) {
       // карточка из версий 1–2 (алгоритм FSRS): переводим в уровни
@@ -171,13 +181,32 @@ export async function answerCard(id, result, { written = false, now = Date.now()
 }
 
 // ── Книги ─────────────────────────────────────────────────────────────────
-export async function addBook(file) {
-  const buf = await file.arrayBuffer();
+/**
+ * Добавляет книгу из файла. opts.groups — группы, в которые книга попадёт сразу; opts.catalogId — если книга пришла из каталога.
+ * Если такая книга уже есть, она остаётся одна: ей добавляются группы и связь с каталогом.
+ */
+export async function addBook(file, opts = {}) {
+  return addBookBuffer(await file.arrayBuffer(), opts);
+}
+
+export async function addBookBuffer(buf, { groups = [], catalogId = "" } = {}) {
   const { meta, chapters, cover } = await readEpub(buf);
   const existing = app.books.find((b) => b.id === meta.id);
-  if (existing) return { book: existing, duplicate: true };
+  if (existing) {
+    const next = [...new Set([...(existing.groups || []), ...groups])];
+    const linked = catalogId && !existing.catalogId;
+    if (next.length !== (existing.groups || []).length || linked) {
+      existing.groups = next;
+      if (linked) existing.catalogId = catalogId;
+      await db.put("books", existing);
+      emit();
+    }
+    return { book: existing, duplicate: true };
+  }
   if (chapters.reduce((sum, c) => sum + c.chars, 0) < 200) throw new Error("В этой книге не нашлось текста: возможно, её страницы это картинки.");
   const waiting = (await db.get("kv", "progress"))?.value || {};
+  const waitingMeta = (await db.get("kv", "bookmeta"))?.value || {};
+  const own = (waitingMeta[meta.id]?.groups || []).filter((id) => app.groups.some((g) => g.id === id));
   const book = {
     id: meta.id,
     title: meta.title,
@@ -185,9 +214,11 @@ export async function addBook(file) {
     chapters: chapters.map(({ href, title, chars }) => ({ href, title, chars })),
     cover,
     progress: waiting[meta.id] || { ch: 0, p: 0 },
+    groups: [...new Set([...groups, ...own])],
     added: Date.now(),
     parser: EPUB_PARSER,
   };
+  if (catalogId) book.catalogId = catalogId;
   await db.put("files", { id: book.id, buf });
   await db.put("books", book);
   app.books.unshift(book);
@@ -220,6 +251,121 @@ export async function removeBook(id) {
   await db.del("books", id);
   await db.del("files", id);
   emit();
+}
+
+// ── Группы книг ───────────────────────────────────────────────────────────
+const persistGroups = () => db.put("kv", { key: "groups", value: app.groups });
+const persistBook = (b) => db.put("books", b);
+
+/** Новая своя группа. Возвращает группу или { error } с причиной по-русски. */
+export async function createGroup(name) {
+  const clean = cleanName(name);
+  if (!clean) return { error: "Введите название группы" };
+  if (nameTaken(clean, app.groups)) return { error: "Группа с таким названием уже есть" };
+  if (nameTaken(clean, app.catalog.groups)) return { error: "Так называется встроенная группа" };
+  const g = { id: newGroupId(), name: clean, created: Date.now() };
+  app.groups.push(g);
+  await persistGroups();
+  emit();
+  return { group: g };
+}
+
+export async function renameGroup(id, name) {
+  const g = app.groups.find((x) => x.id === id);
+  if (!g) return { error: "Группы уже нет" };
+  const clean = cleanName(name);
+  if (!clean) return { error: "Введите название группы" };
+  if (nameTaken(clean, app.groups, id)) return { error: "Группа с таким названием уже есть" };
+  if (nameTaken(clean, app.catalog.groups)) return { error: "Так называется встроенная группа" };
+  g.name = clean;
+  await persistGroups();
+  emit();
+  return { group: g };
+}
+
+/** Удаляет группу, но не книги: они просто выходят из неё. */
+export async function deleteGroup(id) {
+  if (!app.groups.some((g) => g.id === id)) return;
+  app.groups = app.groups.filter((g) => g.id !== id);
+  await persistGroups();
+  for (const b of app.books) {
+    if (b.groups?.includes(id)) {
+      b.groups = b.groups.filter((x) => x !== id);
+      await persistBook(b);
+    }
+  }
+  const meta = (await db.get("kv", "bookmeta"))?.value;
+  if (meta && Object.values(meta).some((m) => m.groups?.includes(id))) {
+    for (const m of Object.values(meta)) m.groups = (m.groups || []).filter((x) => x !== id);
+    await db.put("kv", { key: "bookmeta", value: meta });
+  }
+  emit();
+}
+
+/** Кладёт книгу в свою группу или достаёт её оттуда. */
+export async function toggleBookGroup(bookId, groupId) {
+  const b = app.books.find((x) => x.id === bookId);
+  if (!b || !app.groups.some((g) => g.id === groupId)) return;
+  b.groups = toggleMembership(b.groups, groupId);
+  await persistBook(b);
+  emit();
+}
+
+// ── Каталог встроенных книг ───────────────────────────────────────────────
+// Книги лежат рядом с приложением (папка books/ в репозитории), а books/catalog.json собирает tools/build_catalog.py.
+// Список запоминается на устройстве, поэтому группы видны и без интернета; сам файл книги скачивается по нажатию.
+const siteUrl = (rel) => new URL(rel.split("/").map(encodeURIComponent).join("/"), document.baseURI).href;
+/** Адрес файла из каталога (путь в каталоге считается от папки books/). */
+export const catalogAsset = (rel) => (rel ? siteUrl(`books/${rel}`) : "");
+
+let catalogFetchedAt = 0;
+export async function refreshCatalog({ force = false } = {}) {
+  if (!force && Date.now() - catalogFetchedAt < 60_000) return;
+  catalogFetchedAt = Date.now();
+  let raw;
+  try {
+    const res = await fetch(siteUrl("books/catalog.json"), { cache: "no-cache" });
+    if (res.status === 404) raw = { groups: [], books: [] }; // каталога нет вообще: встроенных книг нет
+    else if (res.ok) raw = await res.json();
+    else return;
+  } catch {
+    return; // нет сети или файл не разобрался: остаётся то, что запомнено
+  }
+  const next = sanitizeCatalog(raw);
+  const changed = JSON.stringify(next) !== JSON.stringify(app.catalog) || !app.catalogLoaded;
+  app.catalog = next;
+  app.catalogLoaded = true;
+  if (!changed) return;
+  await db.put("kv", { key: "catalog", value: next });
+  for (const b of app.books) {
+    const groups = reconcileGroups(b, next);
+    if (groups.join() !== (b.groups || []).join()) {
+      b.groups = groups;
+      await persistBook(b);
+    }
+  }
+  emit();
+}
+
+/** Скачивает книгу из каталога на устройство. Дальше она работает без интернета. */
+export async function addFromCatalog(entry) {
+  if (app.downloading.has(entry.id)) return null;
+  app.downloading.add(entry.id);
+  emit();
+  try {
+    let buf;
+    try {
+      const res = await fetch(siteUrl(`books/${entry.file}`));
+      if (!res.ok) throw new Error(String(res.status));
+      buf = await res.arrayBuffer();
+    } catch {
+      throw new Error("Не удалось скачать книгу. Проверьте интернет и попробуйте ещё раз.");
+    }
+    return await addBookBuffer(buf, { groups: [...entry.groups], catalogId: entry.id });
+  } finally {
+    app.downloading.delete(entry.id);
+    emit();
+  }
 }
 
 // ── Заметки к книгам ──────────────────────────────────────────────────────
@@ -370,13 +516,14 @@ export async function exportData() {
   return JSON.stringify(
     {
       app: BACKUP_TAG,
-      version: 3,
+      version: 4,
       exported: new Date().toISOString(),
       settings: app.settings,
       cards: [...app.cards.values()],
       notes: app.notes,
+      groups: app.groups,
       log,
-      progress: app.books.map((b) => ({ id: b.id, title: b.title, author: b.author, progress: b.progress })),
+      progress: app.books.map((b) => ({ id: b.id, title: b.title, author: b.author, progress: b.progress, groups: (b.groups || []).filter(isUserGroup) })),
     },
     null,
     1,
@@ -400,23 +547,36 @@ export async function importData(text) {
       added += 1;
     }
   }
-  // Позиции в книгах: если книги на этом устройстве ещё нет, запоминаем до её загрузки.
+  // Свои группы: вливаем в имеющиеся (одинаковые названия считаются одной группой)
+  const merged = mergeGroups(app.groups, data.groups);
+  if (merged.added) {
+    app.groups = merged.groups;
+    await persistGroups();
+  }
+  // Позиции и группы книг: если книги на этом устройстве ещё нет, запоминаем до её загрузки.
   const waiting = (await db.get("kv", "progress"))?.value || {};
+  const waitingMeta = (await db.get("kv", "bookmeta"))?.value || {};
   for (const p of data.progress || []) {
+    const groups = (Array.isArray(p.groups) ? p.groups : []).map((id) => merged.map.get(id)).filter(Boolean);
     const b = app.books.find((x) => x.id === p.id);
     if (b) {
       b.progress = p.progress;
+      b.groups = [...new Set([...(b.groups || []), ...groups])];
       await db.put("books", b);
-    } else waiting[p.id] = p.progress;
+    } else {
+      waiting[p.id] = p.progress;
+      if (groups.length) waitingMeta[p.id] = { groups: [...new Set([...(waitingMeta[p.id]?.groups || []), ...groups])] };
+    }
   }
   await db.put("kv", { key: "progress", value: waiting });
+  await db.put("kv", { key: "bookmeta", value: waitingMeta });
   let notesAdded = 0;
   if (Array.isArray(data.notes) && data.notes.length) {
-    const merged = mergeNotes(app.notes, data.notes);
-    if (merged.changed) {
-      app.notes = merged.list;
+    const mergedNotes = mergeNotes(app.notes, data.notes);
+    if (mergedNotes.changed) {
+      app.notes = mergedNotes.list;
       await persistNotes();
-      notesAdded = merged.changed;
+      notesAdded = mergedNotes.changed;
     }
   }
   if (Array.isArray(data.log) && !(await db.all("log")).length) for (const row of data.log) await db.add("log", row);

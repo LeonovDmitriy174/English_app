@@ -26,6 +26,7 @@ const FILES = [
   "js/session.js",
   "js/choices.js",
   "js/notes.js",
+  "js/shelf.js",
   "js/analysis.js",
   "js/zip.js",
   "js/epub.js",
@@ -91,6 +92,10 @@ async function networkFirst(req) {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== location.origin) return;
+  // Встроенные книги и их каталог (books/) в кэш приложения не кладём: книга после скачивания хранится в самом приложении,
+  // а список книг должен приходить свежим. Без интернета каталог берётся из сохранённой копии на устройстве.
+  if (url.pathname.startsWith(new URL("books/", self.registration.scope).pathname)) return;
   e.respondWith(DEV ? networkFirst(req) : cacheFirst(req));
 });

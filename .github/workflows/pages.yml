@@ -1,6 +1,6 @@
 # Публикация сайта на GitHub Pages при каждом пуше в main.
 # Что делает: подставляет в sw.js номер коммита (так телефон узнаёт, что вышла новая версия)
-# и выкладывает только файлы приложения, без .venv, tests, tools и data-src.
+# и выкладывает только файлы приложения и встроенные книги (books/), без .venv, tests, tools и data-src.
 #
 # Один раз включить: репозиторий на GitHub → Settings → Pages → Source: «GitHub Actions».
 name: Опубликовать приложение
@@ -28,10 +28,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Встроенные книги: список и обложки собираются из EPUB в папке books/ (если она есть).
+      # Pillow уменьшает обложки; без него обложки просто берутся как есть или пропускаются.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Собрать каталог книг
+        run: |
+          pip install pillow || true
+          mkdir -p books
+          python3 tools/build_catalog.py
+
       - name: Собрать сайт
         run: |
           mkdir _site
           cp -r index.html manifest.webmanifest sw.js css js data icons _site/
+          cp -r books _site/books
+          rm -f _site/books/README.md _site/books/groups.json
           sed -i "s/__BUILD__/${GITHUB_SHA::7}/" _site/sw.js
           if grep -q "__BUILD__" _site/sw.js; then echo "Маркер версии не заменён" && exit 1; fi
           grep -n "const BUILD" _site/sw.js

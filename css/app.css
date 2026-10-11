@@ -264,6 +264,10 @@ p {
   padding: 10px 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 /* ── Нижняя панель ──────────────────────────────────────────────────────── */
 .tabbar {
   position: fixed;
@@ -847,6 +851,43 @@ p {
 .chip .n {
   opacity: 0.7;
   font-weight: 400;
+}
+.chip.add {
+  gap: 4px;
+  padding: 0 14px 0 10px;
+  border-style: dashed;
+  color: var(--ink-3);
+}
+.chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0;
+  padding: 2px 0 8px;
+}
+.group-tools {
+  display: flex;
+  gap: 22px;
+  margin: -8px 0 6px;
+}
+.group-tools .linkbtn {
+  padding: 6px 0;
+}
+.sheet-sub {
+  margin: 10px 0 8px;
+  font: 600 13.5px var(--sans);
+  color: var(--ink-3);
+}
+.note.err {
+  min-height: 1.45em;
+  margin: 8px 0 0;
+  color: var(--id);
+}
+.book-open[disabled] {
+  opacity: 0.6;
+}
+.dl-mark {
+  flex: none;
+  color: var(--ink-3);
 }
 .rows {
   list-style: none;
