@@ -97,7 +97,7 @@ export function renderReview(root) {
     }
 
     const next = nextDueAt();
-    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatWait(next - Date.now())}.` : "";
+    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatDue(next, Date.now())}.` : "";
     page.append(
       total
         ? h("p", { class: "lead" }, `К повторению: ${total} ${plural(total, ["карточка", "карточки", "карточек"])}`)
@@ -208,7 +208,7 @@ export function renderReview(root) {
           "button",
           { class: `grade${g === 3 ? " good" : ""}${suggest === g ? " suggest" : ""}`, onClick: () => grade(card, g) },
           h("b", null, label),
-          h("small", null, fsrs.formatWait(out[g].due - now)),
+          h("small", null, fsrs.formatDue(out[g].due, now)),
         ),
       ),
     );
@@ -353,7 +353,7 @@ export function renderReview(root) {
     view.className = "view";
     document.body.classList.remove("immersive");
     const next = nextDueAt();
-    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatWait(next - Date.now())}.` : "";
+    const wait = next && next > Date.now() ? `Следующее повторение через ${fsrs.formatDue(next, Date.now())}.` : "";
     const n = session.done;
     session = null;
     view.replaceChildren(

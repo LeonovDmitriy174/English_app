@@ -1,7 +1,7 @@
 // dict.js — словарь пользователя: поиск, фильтры, переход к карточке.
 import { h, icon, closeSheet } from "../dom.js";
 import { app, subscribe, kindClass } from "../store.js";
-import { State, formatWait } from "../fsrs.js";
+import { State, formatDue } from "../fsrs.js";
 import { openSlip } from "./slip.js";
 
 const FILTERS = [
@@ -21,7 +21,7 @@ function dueOf(card, now) {
   if (card.fsrs.state === State.New) return { text: "новое", hot: true };
   const diff = card.fsrs.due - now;
   if (diff <= 0) return { text: "пора", hot: true };
-  return { text: `через ${formatWait(diff)}`, hot: false };
+  return { text: `через ${formatDue(card.fsrs.due, now)}`, hot: false };
 }
 
 let filter = "all";

@@ -1,7 +1,13 @@
 // sw.js — офлайн-кэш. После первой загрузки приложение целиком живёт на устройстве.
-// При любом изменении файлов приложения увеличьте VERSION: старый кэш будет заменён.
-const VERSION = "v2";
-const CACHE = `ember-${VERSION}`;
+//
+// Версия подставляется автоматически при публикации (.github/workflows/pages.yml): маркер в
+// строке BUILD заменяется на короткий номер коммита. Поэтому при каждом обновлении репозитория
+// телефон видит изменённый sw.js, скачивает свежие файлы и приложение предлагает перезапуск.
+// Если маркер не заменён (запуск на компьютере или публикация «из ветки» без workflow),
+// включается режим разработки: сначала сеть, кэш служит запасным вариантом без интернета.
+const BUILD = "__BUILD__";
+const DEV = BUILD.startsWith("__");
+const CACHE = `ember-${DEV ? "dev" : BUILD}`;
 const FILES = [
   "./",
   "index.html",
@@ -28,10 +34,26 @@ const FILES = [
   "js/views/settings.js",
 ];
 
+// Установка: кладём все файлы в новый кэш. cache: "reload" — мимо HTTP-кэша браузера,
+// иначе в только что опубликованной версии могли бы оказаться файлы десятиминутной давности.
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) =>
+        Promise.all(
+          FILES.map(async (f) => {
+            const res = await fetch(new Request(f, { cache: "reload" }));
+            if (!res.ok) throw new Error(`${f}: ${res.status}`);
+            await cache.put(f, res);
+          }),
+        ),
+      )
+      .then(() => self.skipWaiting()),
+  );
 });
 
+// Активация: удаляем кэши прошлых версий. Данные пользователя (IndexedDB) не затрагиваются.
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
@@ -41,18 +63,28 @@ self.addEventListener("activate", (e) => {
   );
 });
 
-// Сначала кэш; если файла нет — сеть, и найденное кладём в кэш.
+async function cacheFirst(req) {
+  const hit = await caches.match(req, { ignoreSearch: true });
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
+  return res;
+}
+
+async function networkFirst(req) {
+  try {
+    const res = await fetch(req.url, { cache: "no-cache" });
+    if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
+    return res;
+  } catch (err) {
+    const hit = await caches.match(req, { ignoreSearch: true });
+    if (hit) return hit;
+    throw err;
+  }
+}
+
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then(
-      (hit) =>
-        hit ||
-        fetch(req).then((res) => {
-          if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
-          return res;
-        }),
-    ),
-  );
+  e.respondWith(DEV ? networkFirst(req) : cacheFirst(req));
 });

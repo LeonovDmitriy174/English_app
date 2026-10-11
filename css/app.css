@@ -1129,6 +1129,36 @@ p {
   opacity: 1;
   transform: none;
 }
+/* Плашка «Доступна новая версия» */
+.update {
+  position: fixed;
+  z-index: 70;
+  bottom: calc(var(--tab-h) + var(--safe-b) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 24px);
+  padding: 6px 6px 6px 16px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 500 14.5px var(--sans);
+  white-space: nowrap;
+}
+.immersive .update {
+  bottom: calc(var(--safe-b) + 16px);
+}
+.update button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--on-ink);
+  color: var(--ink);
+  font: 600 14.5px var(--sans);
+}
+
 @media (min-width: 720px) {
   .text {
     font-size: calc(var(--read-size) + 1px);

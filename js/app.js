@@ -72,11 +72,31 @@ async function start() {
   window.addEventListener("hashchange", route);
   route();
 
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch(() => {
+  watchUpdates();
+}
+
+// Офлайн-кэш и обновления. Новая версия скачивается сама, а перезапуск делаете вы, когда удобно.
+function watchUpdates() {
+  if (!("serviceWorker" in navigator)) return;
+  let controlled = !!navigator.serviceWorker.controller; // самая первая установка плашки не требует
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (controlled) showUpdate();
+    controlled = true;
+  });
+  navigator.serviceWorker
+    .register("sw.js")
+    .then((reg) => {
+      // iOS держит приложение в памяти днями: проверяем обновление, когда вы к нему возвращаетесь
+      document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && reg.update().catch(() => {}));
+    })
+    .catch(() => {
       /* без офлайн-кэша приложение всё равно работает, пока есть доступ к файлам */
     });
-  }
+}
+
+function showUpdate() {
+  if (document.querySelector(".update")) return;
+  document.body.append(h("div", { class: "update", role: "status" }, h("span", null, "Доступна новая версия"), h("button", { onClick: () => location.reload() }, "Обновить")));
 }
 
 start();
