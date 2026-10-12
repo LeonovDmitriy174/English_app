@@ -1,6 +1,6 @@
 // slip.js — карточка слова («листок картотеки»): перевод, определение, цитата из книги, пример.
 import { h, icon, openSheet, toast } from "../dom.js";
-import { cardFor, saveCard, removeCard, posLabel, kindClass } from "../store.js";
+import { cardFor, saveCard, removeCard, setTranslation, setMnemonic, setSkip, posLabel, kindClass } from "../store.js";
 import { speak, canSpeak } from "../tts.js";
 
 /**
@@ -15,6 +15,7 @@ import { speak, canSpeak } from "../tts.js";
  */
 export function openSlip(opts) {
   let o = opts;
+  let editing = null; // что сейчас правится у слова из словаря: "ru" (перевод) или "mnemonic" (ассоциация)
   const sheet = openSheet({
     content: build(),
     cls: `slip ${cat(o)}`,
@@ -28,9 +29,66 @@ export function openSlip(opts) {
   }
 
   function refresh() {
+    editing = null;
     sheet.el.className = `sheet slip open ${cat(o)}`;
     sheet.setContent(build());
     sheet.body.scrollTop = 0;
+  }
+
+  /** Перерисовать, не прокручивая лист вверх (при правке перевода и ассоциации). */
+  function rebuild() {
+    sheet.setContent(build());
+  }
+
+  /** Строка ввода с кнопками «Сохранить» и «Отмена». */
+  function editor({ value, placeholder, label, onSave }) {
+    const input = h("input", { class: "field", type: "text", value, placeholder, autocomplete: "off", "aria-label": label, enterkeyhint: "done" });
+    const save = () => onSave(input.value);
+    input.addEventListener("keydown", (e) => e.key === "Enter" && save());
+    setTimeout(() => input.focus(), 60);
+    return h(
+      "div",
+      { class: "edit" },
+      input,
+      h(
+        "div",
+        { class: "edit-actions" },
+        h("button", { class: "btn primary", onClick: save }, "Сохранить"),
+        h(
+          "button",
+          {
+            class: "linkbtn",
+            onClick: () => {
+              editing = null;
+              rebuild();
+            },
+          },
+          "Отмена",
+        ),
+      ),
+    );
+  }
+
+  /** Небольшие действия со словом из словаря: правка перевода, ассоциация, «Это имя». Уровни они не трогают. */
+  function tools(saved) {
+    const act = (text, run) => h("button", { class: "linkbtn", onClick: run }, text);
+    return h(
+      "div",
+      { class: "slip-tools" },
+      act("Править перевод", () => {
+        editing = "ru";
+        rebuild();
+      }),
+      act(saved.mnemonic ? "Изменить ассоциацию" : "Моя ассоциация", () => {
+        editing = "mnemonic";
+        rebuild();
+      }),
+      act(saved.skip ? "Вернуть в повторение" : "Это имя, не повторять", async () => {
+        await setSkip(saved.id, !saved.skip);
+        toast(saved.skip ? "Не будет повторяться" : "Снова в повторении");
+        rebuild();
+      }),
+    );
   }
 
   function quote(ctx) {
@@ -49,6 +107,8 @@ export function openSlip(opts) {
 
     const shown = (surface || "").toLowerCase();
     const differs = shown && shown !== entry.w;
+    // свой перевод, если вы его правили, иначе словарный
+    const tr = saved?.edited ? { ru: saved.ru, rm: "" } : entry;
     const root = h(
       "div",
       null,
@@ -58,20 +118,47 @@ export function openSlip(opts) {
         h("div", null, h("h2", { class: "hw" }, entry.w), h("p", { class: "meta" }, posLabel(entry)), differs && h("p", { class: "meta via" }, `в тексте: ${shown}`)),
         canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(entry.w) }, icon("speaker", 24)),
       ),
-      entry.ru && h("p", { class: "ru" }, entry.ru),
-      !entry.ru && entry.rm && h("p", { class: "ru auto" }, entry.rm),
-      !entry.ru && entry.rm && h("p", { class: "auto-note" }, "автоперевод определения, возможны неточности"),
+      saved && editing === "ru"
+        ? editor({
+            value: tr.ru || tr.rm || "",
+            placeholder: "Перевод",
+            label: "Перевод слова",
+            onSave: async (text) => {
+              if (await setTranslation(saved.id, text)) toast("Перевод сохранён");
+              editing = null;
+              rebuild();
+            },
+          })
+        : [
+            tr.ru && h("p", { class: "ru" }, tr.ru),
+            !tr.ru && tr.rm && h("p", { class: "ru auto" }, tr.rm),
+            !tr.ru && tr.rm && h("p", { class: "auto-note" }, "автоперевод определения, возможны неточности"),
+          ],
       entry.en && h("p", { class: "def" }, entry.en),
-      !entry.ru && !entry.rm && h("p", { class: "note" }, "Перевода на русский пока нет, только определение."),
+      !tr.ru && !tr.rm && h("p", { class: "note" }, "Перевода на русский пока нет, только определение."),
       entry.of?.length > 0 && h("p", { class: "meta via" }, `Может быть и формой слова: ${entry.of.join(", ")}`),
       quote(ctx || saved?.ctx?.[0]),
       entry.ex && h("p", { class: "exl" }, h("small", null, "Пример"), entry.ex),
+      saved && editing === "mnemonic"
+        ? editor({
+            value: saved.mnemonic || "",
+            placeholder: "Образ или созвучие, которое поможет запомнить",
+            label: "Моя ассоциация",
+            onSave: async (text) => {
+              await setMnemonic(saved.id, text);
+              editing = null;
+              rebuild();
+            },
+          })
+        : saved?.mnemonic && h("p", { class: "mnemo" }, h("small", null, "Моя ассоциация"), saved.mnemonic),
+      saved?.skip && h("p", { class: "note tight" }, "Не повторяется: слово остаётся в словаре, но в повторение не попадает."),
     );
 
     const actions = h("div", { class: "slip-actions" });
     if (saved) {
       actions.append(h("button", { class: "btn quiet grow", disabled: true }, icon("check", 20), "В словаре"));
       root.append(actions);
+      root.append(tools(saved));
       root.append(
         h(
           "button",

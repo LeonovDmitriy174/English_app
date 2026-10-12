@@ -5,6 +5,8 @@
 // Вместе с заметкой хранится цитата из абзаца: по ней заметку видно в списке даже без книги, а если
 // разбор главы когда-нибудь изменится и номера абзацев сдвинутся, заметка находит своё место по цитате.
 
+import { subtreeSet } from "./shelf.js";
+
 const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
 /** Короткая выдержка из текста: не длиннее n знаков, обрезка по границе слова. */
@@ -99,4 +101,20 @@ export function groupByBook(notes, books) {
   }
   for (const g of groups.values()) g.notes.sort((a, b) => a.ch - b.ch || a.p - b.p);
   return [...groups.values()].sort((a, b) => (a.present === b.present ? (order.get(a.book) ?? 0) - (order.get(b.book) ?? 0) : a.present ? -1 : 1));
+}
+
+/**
+ * Заметки папки (и её вложенных папок). Заметка лежит в тех же папках, что и её книга, отдельно её не раскладывают.
+ * ids — множество id папок (shelf.subtreeSet). Заметки книг, которых нет на устройстве, ни в какой папке не лежат.
+ */
+export function notesInFolder(notes, books, ids) {
+  const groupsOf = new Map(books.map((b) => [b.id, b.groups || []]));
+  return notes.filter((n) => groupsOf.get(n.book)?.some((g) => ids.has(g)));
+}
+
+/** Сколько заметок в каждой папке дерева (с вложенными): Map id → число. */
+export function noteCounts(notes, books, tree) {
+  const counts = new Map();
+  for (const n of tree.all) counts.set(n.id, notesInFolder(notes, books, subtreeSet(tree, n.id)).length);
+  return counts;
 }

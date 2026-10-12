@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { excerpt, newNote, noteAt, notesIn, mergeNotes, findAnchor, groupByBook } from "../js/notes.js";
+import { excerpt, newNote, noteAt, notesIn, mergeNotes, findAnchor, groupByBook, notesInFolder, noteCounts } from "../js/notes.js";
+import { folderTree, subtreeSet } from "../js/shelf.js";
 
 const base = { book: "b1", bookTitle: "Book One", ch: 2, chTitle: "Chapter", p: 5, quote: "Mr. Dursley was the director of a firm called Grunnings." };
 const note = (over = {}, now = 1000) => newNote({ ...base, ...over }, now, () => 0.5);
@@ -91,4 +92,23 @@ test("группы по книгам: порядок книг, порядок в
   assert.deepEqual(g[1].notes.map((n) => [n.ch, n.p]), [[1, 2], [1, 8], [3, 1]]);
   assert.equal(g[2].present, false);
   assert.equal(g[0].present, true);
+});
+
+test("заметки папки: лежат в папках своей книги, вложенные папки входят в родителя", () => {
+  const catalog = { groups: [{ id: "s-default", name: "Встроенные", parent: "" }, { id: "s-kids", name: "Детям", parent: "s-default" }], books: [] };
+  const tree = folderTree({ catalog, userGroups: [{ id: "u-1", name: "Для сестры" }] });
+  const books = [{ id: "b1", groups: ["s-kids", "u-1"] }, { id: "b2", groups: ["s-default"] }, { id: "b3", groups: [] }];
+  const notes = [note({ book: "b1", p: 1 }), note({ book: "b1", p: 2 }), note({ book: "b2", p: 1 }), note({ book: "b3", p: 1 }), note({ book: "gone", p: 1 })];
+  assert.equal(notesInFolder(notes, books, subtreeSet(tree, "s-kids")).length, 2);
+  assert.equal(notesInFolder(notes, books, subtreeSet(tree, "u-1")).length, 2, "та же книга в двух папках: заметки видны в каждой");
+  assert.equal(notesInFolder(notes, books, subtreeSet(tree, "s-default")).length, 3, "заметки «Детям» и самой «Встроенные»");
+  const counts = noteCounts(notes, books, tree);
+  assert.deepEqual([...counts], [["s-default", 3], ["s-kids", 2], ["u-1", 2]]);
+});
+
+test("заметки без папки и заметки удалённых книг не лежат ни в одной папке", () => {
+  const tree = folderTree({ catalog: { groups: [], books: [] }, userGroups: [{ id: "u-1", name: "А" }] });
+  const notes = [note({ book: "b3" }), note({ book: "gone" })];
+  assert.equal(noteCounts(notes, [{ id: "b3" }], tree).get("u-1"), 0);
+  assert.deepEqual(notesInFolder(notes, [{ id: "b3" }], subtreeSet(tree, "u-1")), []);
 });

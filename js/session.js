@@ -15,13 +15,16 @@ export const newTracker = () => new Map();
 
 /**
  * Что делать с ответом. result: 'ok' | 'near' | 'no'.
- * Возвращает { effective, requeue }: какой результат записать в уровень и вернуть ли слово в этот заход.
+ * Возвращает { effective, requeue, again }: какой результат записать в уровень, вернуть ли слово в этот заход и
+ * повторная ли это ошибка по слову за заход (такая ошибка в счёт «трудных слов» не идёт).
  */
 export function judgeInSession(tracker, id, result) {
   const st = tracker.get(id) || { raised: false, failed: false, asked: 0 };
   let effective = result;
   let requeue = false;
+  let again = false;
   if (result === "no") {
+    again = st.failed;
     st.failed = true;
     st.asked += 1;
     requeue = st.asked <= MAX_RETRIES; // не мучаем бесконечно: после двух возвратов слово оставляем до следующего захода
@@ -30,7 +33,7 @@ export function judgeInSession(tracker, id, result) {
     else st.raised = true;
   }
   tracker.set(id, st);
-  return { effective, requeue };
+  return { effective, requeue, again };
 }
 
 /** Куда вставить возвращаемое слово: через `gap` других карточек (или в конец, если их меньше). */

@@ -149,6 +149,12 @@ for (const line of IRREGULAR_SRC.trim().split("\n")) {
   }
 }
 
+const FORMS_OF = new Map(); // начальная форма -> её неправильные формы
+for (const [form, lemmas] of IRREGULAR) for (const l of lemmas) FORMS_OF.set(l, [...(FORMS_OF.get(l) || []), form]);
+
+/** Неправильные формы слова из таблицы («grow» → grew, grown). Пустой список, если слово правильное или его нет в таблице. */
+export const irregularForms = (lemma) => [...(FORMS_OF.get(norm(lemma)) || [])];
+
 /** Возможные начальные формы слова в порядке убывания вероятности. */
 export function lemmaCandidates(raw) {
   const out = [];

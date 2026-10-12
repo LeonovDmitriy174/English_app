@@ -3,6 +3,7 @@ import { h, icon, openSheet, closeSheet } from "../dom.js";
 import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote } from "../store.js";
 import { noteAt, notesIn, findAnchor } from "../notes.js";
 import { openNoteSheet } from "./notes.js";
+import { lastPage } from "../nav.js";
 import { chapterBlocks, prettyTitle } from "../epub.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
@@ -63,7 +64,7 @@ function analyze(d, names) {
 export function renderReader(root, bookId) {
   const book = app.books.find((b) => b.id === bookId);
   if (!book) {
-    location.hash = "#/library";
+    location.hash = lastPage.library;
     return;
   }
   let chIdx = Math.min(book.progress?.ch ?? 0, book.chapters.length - 1);
@@ -81,7 +82,7 @@ export function renderReader(root, bookId) {
   const bar = h(
     "header",
     { class: "rbar" },
-    h("button", { class: "iconbtn", "aria-label": "К списку книг", onClick: () => (location.hash = "#/library") }, icon("back", 24)),
+    h("button", { class: "iconbtn", "aria-label": "К списку книг", onClick: () => (location.hash = lastPage.library) }, icon("back", 24)),
     titleBtn,
     h("button", { class: "iconbtn", "aria-label": "Оставить заметку или закладку", onClick: () => openNoteAt(currentPara()) }, icon("flag", 22)),
     h("button", { class: "iconbtn aa", "aria-label": "Настройки чтения", onClick: () => openReaderSettings() }, "Aa"),

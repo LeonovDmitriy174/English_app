@@ -21,6 +21,7 @@ const plural = (n, f) => {
 
 /** Справа в строке: «новое», «пора» или индикатор уровня. Времени повторения не показываем. */
 function stateOf(card, now) {
+  if (card.skip) return { text: "не повторяется" };
   if (isNew(card.srs)) return { text: "новое", hot: true };
   if (card.srs.due <= now) return { text: "пора", hot: true };
   return { bar: levelBar(card.srs.lv) };

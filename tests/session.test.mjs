@@ -57,3 +57,12 @@ test("возвращаемое слово встаёт через три кар�
   assert.equal(requeuePosition(9, 10), 10);
   assert.equal(requeuePosition(1, 1), 1);
 });
+
+test("повторная ошибка по тому же слову за заход помечена: в трудные слова она не засчитывается", () => {
+  const t = newTracker();
+  assert.equal(judgeInSession(t, "w", "no").again, false, "первая ошибка");
+  assert.equal(judgeInSession(t, "w", "no").again, true, "вторая за тот же заход");
+  assert.equal(judgeInSession(t, "w", "no").again, true);
+  assert.equal(judgeInSession(t, "other", "no").again, false, "другое слово считается отдельно");
+  assert.equal(judgeInSession(t, "w", "ok").again, false);
+});

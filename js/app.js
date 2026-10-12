@@ -6,6 +6,7 @@ import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
 import { renderReview } from "./views/review.js";
 import { renderNotes } from "./views/notes.js";
+import { remember, tabHref, lastPage } from "./nav.js";
 
 const root = document.getElementById("app");
 const stage = h("div");
@@ -27,7 +28,7 @@ function paintTabs() {
     ...tabs.map(([key, label, ic]) =>
       h(
         "a",
-        { class: "tab", href: `#/${key}`, "aria-current": current === key ? "page" : null },
+        { class: "tab", href: tabHref(key, current), "aria-current": current === key ? "page" : null },
         icon(ic, 24),
         label,
         key === "review" && due > 0 && h("span", { class: "badge", "aria-label": `к повторению: ${due}` }, due > 99 ? "99+" : due),
@@ -57,10 +58,12 @@ function route() {
     cleanup = renderReview(stage);
   } else if (name === "notes") {
     current = "notes";
-    cleanup = renderNotes(stage);
+    remember("notes", arg);
+    cleanup = renderNotes(stage, arg);
   } else {
     current = "library";
-    cleanup = renderLibrary(stage);
+    remember("library", arg);
+    cleanup = renderLibrary(stage, arg);
   }
   paintTabs();
 }
@@ -75,6 +78,8 @@ async function start() {
   }
   subscribe(paintTabs);
   window.addEventListener("hashchange", route);
+  // Запуск без адреса: книги открываются там, где вы закончили (какая папка), как в «Заметках» на iPhone
+  if (["", "#", "#/"].includes(location.hash) && lastPage.library !== "#/library") history.replaceState(null, "", lastPage.library);
   route();
 
   watchUpdates();

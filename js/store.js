@@ -6,9 +6,10 @@ import { openZip } from "./zip.js";
 import { analyzeBook, dictSignature } from "./analysis.js";
 import * as levels from "./levels.js";
 import { newNote, noteAt, mergeNotes } from "./notes.js";
-import { sanitizeCatalog, cleanName, nameTaken, newGroupId, toggleMembership, isUserGroup, reconcileGroups, mergeGroups } from "./shelf.js";
+import { sanitizeCatalog, cleanName, nameTaken, newGroupId, toggleMembership, isUserGroup, reconcileGroups, mergeGroups, folderTree, siblingsOf, canNestIn, subtreeIds } from "./shelf.js";
 import { DEFAULT_MIX, normalizeMix, capOf, isWritten } from "./modes.js";
 import { contextPool, scanBook, mergeFound, ENOUGH } from "./context.js";
+import { leeches } from "./leech.js";
 
 export const APP_NAME = "Ember Chronicle";
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
@@ -17,13 +18,13 @@ export const app = {
   glossary: new Glossary([]),
   cards: new Map(),
   books: [],
-  // newPerDay и mixModes это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
-  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20, mixModes: [...DEFAULT_MIX] },
+  // newPerDay, mixModes и speedRule это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
+  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20, mixModes: [...DEFAULT_MIX], speedRule: true },
   daily: { day: "", newDone: 0 },
   analysis: null, // { id, pct } пока идёт разбор книги
   notes: [], // заметки и закладки к книгам (js/notes.js)
   jump: null, // { id } заметка, к которой читалка должна перейти при открытии
-  groups: [], // свои группы книг: [{ id: "u-…", name, created }]
+  groups: [], // свои папки книг: [{ id: "u-…", name, created, parent? }]; parent — папка верхнего уровня (своя или встроенная)
   catalog: { groups: [], books: [] }, // встроенные книги из books/catalog.json (js/shelf.js)
   catalogLoaded: false, // каталог получен из сети или из сохранённой копии
   downloading: new Set(), // id книг каталога, которые скачиваются сейчас
@@ -155,10 +156,35 @@ export async function removeCard(id) {
   emit();
 }
 
+/** Свой перевод вместо словарного. Пустой перевод не сохраняется. Возвращает true, если перевод изменён. */
+export async function setTranslation(id, text) {
+  const ru = String(text || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!ru || !app.cards.has(id)) return false;
+  await updateCard(id, { ru, rm: "", edited: true });
+  return true;
+}
+
+/** «Моя ассоциация»: короткая запоминалка к слову. */
+export const setMnemonic = (id, text) => updateCard(id, { mnemonic: String(text || "").replace(/\s+/g, " ").trim().slice(0, 200) });
+
+/** «Это имя, не повторять»: слово остаётся в словаре, но из повторения уходит. Уровни при этом не трогаются. */
+export const setSkip = (id, skip) => updateCard(id, { skip: !!skip });
+
 // ── Повторение ────────────────────────────────────────────────────────────
+/** Сколько сейчас трудных слов (js/leech.js). */
+export const hardCount = () => leeches([...app.cards.values()]).length;
+
+/**
+ * Очередь повторения. scope: 'all' | 'w' | 'pv' | 'id' | 'hard' (трудные слова: все, не только те, что пора повторять).
+ * Слова, помеченные «Это имя, не повторять», в очередь не попадают.
+ */
 export function queue(scope = "all", now = Date.now()) {
-  const inScope = (c) => scope === "all" || c.t === scope;
-  const all = [...app.cards.values()].filter(inScope);
+  const live = [...app.cards.values()].filter((c) => !c.skip);
+  if (scope === "hard") {
+    const hard = leeches(live);
+    return { due: hard, fresh: [], list: hard };
+  }
+  const all = live.filter((c) => scope === "all" || c.t === scope);
   const due = all.filter((c) => !levels.isNew(c.srs) && c.srs.due <= now).sort((a, b) => a.srs.due - b.srs.due);
   const left = Math.max(0, app.settings.newPerDay - (app.daily.day === today() ? app.daily.newDone : 0));
   const fresh = all.filter((c) => levels.isNew(c.srs)).sort((a, b) => a.added - b.added).slice(0, left);
@@ -167,17 +193,24 @@ export function queue(scope = "all", now = Date.now()) {
 
 /**
  * Записать ответ на карточку. result: 'ok' | 'near' | 'no'; task: задание (js/modes.js), по нему определяется, письменное оно
- * и до какого уровня поднимает слово; ctxText: предложение, которое только что показывали (чтобы в следующий раз взять другое).
+ * и до какого уровня поднимает слово; ctxText: предложение, которое только что показывали (чтобы в следующий раз взять другое);
+ * ms: сколько длился ответ (в журнал, пользователю не показывается); lapse: false, если это повтор после ошибки в том же заходе
+ * (вторая ошибка по тому же слову за заход «трудным» его не делает).
+ * Повторение раньше срока (например, трудные слова вне очереди) уровень не поднимает и срок не двигает.
  * Возвращает { card, before, after }: уровень до и после ответа (для индикатора).
  */
-export async function answerCard(id, result, { task = "", written, now = Date.now(), ctxText = "" } = {}) {
+export async function answerCard(id, result, { task = "", written, now = Date.now(), ctxText = "", ms = null, lapse = true } = {}) {
   const c = app.cards.get(id);
   const before = c.srs.lv;
+  const lapsesBefore = c.srs.lapses || 0;
   const wr = written ?? isWritten(task);
-  c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task) });
+  const early = before > 0 && c.srs.due > now;
+  if (early && result !== "no") c.srs = { ...c.srs, last: now, reps: (c.srs.reps || 0) + 1 };
+  else c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task) });
+  if (!lapse) c.srs.lapses = lapsesBefore;
   if (ctxText) c.lastCtx = ctxText;
   await db.put("cards", c);
-  await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv });
+  await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv, ...(Number.isFinite(ms) ? { ms: Math.round(ms) } : {}) });
   if (before === 0) {
     if (app.daily.day !== today()) app.daily = { day: today(), newDone: 0 };
     app.daily.newDone += 1;
@@ -199,7 +232,7 @@ export async function ensureContexts() {
   if (scanning) return;
   scanning = true;
   try {
-    const short = [...app.cards.values()].filter((c) => contextPool(c, app.glossary).length < ENOUGH);
+    const short = [...app.cards.values()].filter((c) => !c.skip && contextPool(c, app.glossary).length < ENOUGH);
     for (const b of [...app.books]) {
       const wanted = new Map();
       for (const card of short) {
@@ -228,8 +261,8 @@ export async function ensureContexts() {
 
 // ── Книги ─────────────────────────────────────────────────────────────────
 /**
- * Добавляет книгу из файла. opts.groups — группы, в которые книга попадёт сразу; opts.catalogId — если книга пришла из каталога.
- * Если такая книга уже есть, она остаётся одна: ей добавляются группы и связь с каталогом.
+ * Добавляет книгу из файла. opts.groups — папки, в которые книга попадёт сразу; opts.catalogId — если книга пришла из каталога.
+ * Если такая книга уже есть, она остаётся одна: ей добавляются папки и связь с каталогом.
  */
 export async function addBook(file, opts = {}) {
   return addBookBuffer(await file.arrayBuffer(), opts);
@@ -299,17 +332,30 @@ export async function removeBook(id) {
   emit();
 }
 
-// ── Группы книг ───────────────────────────────────────────────────────────
+// ── Папки книг ────────────────────────────────────────────────────────────
+// Внутри хранилища они по-прежнему называются groups (так записаны ваши данные и резервные копии).
+// Вложенность одна: у папки верхнего уровня бывают вложенные, у вложенных своих нет. Это правило проверяется здесь,
+// поэтому из интерфейса, из резервной копии и из каталога глубже одной вложенности не получится.
 const persistGroups = () => db.put("kv", { key: "groups", value: app.groups });
 const persistBook = (b) => db.put("books", b);
+export const folders = () => folderTree({ catalog: app.catalog, userGroups: app.groups });
 
-/** Новая своя группа. Возвращает группу или { error } с причиной по-русски. */
-export async function createGroup(name) {
+const NESTED_ERR = "Глубже одной вложенности папки не делаются";
+
+/** Проверка названия среди соседей (папок в той же папке). Возвращает текст ошибки или "". */
+function nameProblem(name, parent, except = null) {
+  if (!name) return "Введите название папки";
+  if (nameTaken(name, siblingsOf(folders(), parent), except)) return parent ? "В этой папке уже есть папка с таким названием" : "Папка с таким названием уже есть";
+  return "";
+}
+
+/** Новая своя папка; parent — id папки верхнего уровня или null. Возвращает { group } или { error } с причиной по-русски. */
+export async function createGroup(name, parent = null) {
   const clean = cleanName(name);
-  if (!clean) return { error: "Введите название группы" };
-  if (nameTaken(clean, app.groups)) return { error: "Группа с таким названием уже есть" };
-  if (nameTaken(clean, app.catalog.groups)) return { error: "Так называется встроенная группа" };
-  const g = { id: newGroupId(), name: clean, created: Date.now() };
+  if (parent && !canNestIn(folders(), parent)) return { error: folders().byId.has(parent) ? NESTED_ERR : "Папки, куда вы кладёте, уже нет" };
+  const error = nameProblem(clean, parent);
+  if (error) return { error };
+  const g = { id: newGroupId(), name: clean, created: Date.now(), ...(parent ? { parent } : {}) };
   app.groups.push(g);
   await persistGroups();
   emit();
@@ -318,37 +364,59 @@ export async function createGroup(name) {
 
 export async function renameGroup(id, name) {
   const g = app.groups.find((x) => x.id === id);
-  if (!g) return { error: "Группы уже нет" };
+  if (!g) return { error: "Папки уже нет" };
   const clean = cleanName(name);
-  if (!clean) return { error: "Введите название группы" };
-  if (nameTaken(clean, app.groups, id)) return { error: "Группа с таким названием уже есть" };
-  if (nameTaken(clean, app.catalog.groups)) return { error: "Так называется встроенная группа" };
+  const error = nameProblem(clean, folders().byId.get(id)?.parent || null, id);
+  if (error) return { error };
   g.name = clean;
   await persistGroups();
   emit();
   return { group: g };
 }
 
-/** Удаляет группу, но не книги: они просто выходят из неё. */
+/** Перекладывает свою папку на верхний уровень (parent = null) или внутрь папки верхнего уровня. */
+export async function moveGroup(id, parent = null) {
+  const g = app.groups.find((x) => x.id === id);
+  if (!g) return { error: "Папки уже нет" };
+  const tree = folders();
+  const node = tree.byId.get(id);
+  if (parent) {
+    if (parent === id || !tree.byId.has(parent)) return { error: "Папки, куда вы кладёте, уже нет" };
+    if (node.children.length || !canNestIn(tree, parent)) return { error: NESTED_ERR };
+  }
+  if ((node.parent || null) === (parent || null)) return { group: g };
+  const error = nameProblem(g.name, parent, id);
+  if (error) return { error: parent ? "В выбранной папке уже есть папка с таким названием" : "На верхнем уровне уже есть папка с таким названием" };
+  if (parent) g.parent = parent;
+  else delete g.parent;
+  await persistGroups();
+  emit();
+  return { group: g };
+}
+
+/** Удаляет свою папку вместе с вложенными, но не книги: они просто выходят из папок. Возвращает число удалённых папок. */
 export async function deleteGroup(id) {
-  if (!app.groups.some((g) => g.id === id)) return;
-  app.groups = app.groups.filter((g) => g.id !== id);
+  const mine = new Set(app.groups.map((g) => g.id));
+  if (!mine.has(id)) return 0;
+  const gone = new Set(subtreeIds(folders(), id).filter((x) => mine.has(x)));
+  app.groups = app.groups.filter((g) => !gone.has(g.id));
   await persistGroups();
   for (const b of app.books) {
-    if (b.groups?.includes(id)) {
-      b.groups = b.groups.filter((x) => x !== id);
+    if (b.groups?.some((x) => gone.has(x))) {
+      b.groups = b.groups.filter((x) => !gone.has(x));
       await persistBook(b);
     }
   }
   const meta = (await db.get("kv", "bookmeta"))?.value;
-  if (meta && Object.values(meta).some((m) => m.groups?.includes(id))) {
-    for (const m of Object.values(meta)) m.groups = (m.groups || []).filter((x) => x !== id);
+  if (meta && Object.values(meta).some((m) => m.groups?.some((x) => gone.has(x)))) {
+    for (const m of Object.values(meta)) m.groups = (m.groups || []).filter((x) => !gone.has(x));
     await db.put("kv", { key: "bookmeta", value: meta });
   }
   emit();
+  return gone.size;
 }
 
-/** Кладёт книгу в свою группу или достаёт её оттуда. */
+/** Кладёт книгу в свою папку или достаёт её оттуда. */
 export async function toggleBookGroup(bookId, groupId) {
   const b = app.books.find((x) => x.id === bookId);
   if (!b || !app.groups.some((g) => g.id === groupId)) return;
@@ -359,7 +427,7 @@ export async function toggleBookGroup(bookId, groupId) {
 
 // ── Каталог встроенных книг ───────────────────────────────────────────────
 // Книги лежат рядом с приложением (папка books/ в репозитории), а books/catalog.json собирает tools/build_catalog.py.
-// Список запоминается на устройстве, поэтому группы видны и без интернета; сам файл книги скачивается по нажатию.
+// Список запоминается на устройстве, поэтому папки видны и без интернета; сам файл книги скачивается по нажатию.
 const siteUrl = (rel) => new URL(rel.split("/").map(encodeURIComponent).join("/"), document.baseURI).href;
 /** Адрес файла из каталога (путь в каталоге считается от папки books/). */
 export const catalogAsset = (rel) => (rel ? siteUrl(`books/${rel}`) : "");
@@ -593,13 +661,13 @@ export async function importData(text) {
       added += 1;
     }
   }
-  // Свои группы: вливаем в имеющиеся (одинаковые названия считаются одной группой)
+  // Свои папки: вливаем в имеющиеся (одинаковое название в одной и той же папке считается одной папкой)
   const merged = mergeGroups(app.groups, data.groups);
   if (merged.added) {
     app.groups = merged.groups;
     await persistGroups();
   }
-  // Позиции и группы книг: если книги на этом устройстве ещё нет, запоминаем до её загрузки.
+  // Позиции и папки книг: если книги на этом устройстве ещё нет, запоминаем до её загрузки.
   const waiting = (await db.get("kv", "progress"))?.value || {};
   const waitingMeta = (await db.get("kv", "bookmeta"))?.value || {};
   for (const p of data.progress || []) {

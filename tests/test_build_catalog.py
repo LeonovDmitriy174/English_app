@@ -70,7 +70,7 @@ class CatalogTests(unittest.TestCase):
     def build(self, **kw):
         return bc.build(self.books, **kw)
 
-    def test_папки_становятся_группами_а_корень_группой_default(self):
+    def test_подпапки_лежат_внутри_встроенных_а_корень_это_default(self):
         self.put("root.epub", make_epub("Root Book", extra="r"))
         self.put("kids/alice.epub", make_epub("Alice", extra="a"))
         self.put("Классика/dracula.epub", make_epub("Dracula", "Bram Stoker", extra="d"))
@@ -78,6 +78,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual([g["name"] for g in cat["groups"]], ["Встроенные", "kids", "Классика"])
         self.assertEqual(cat["groups"][0]["id"], "s-default")
         self.assertEqual(cat["groups"][2]["id"], "s-классика")
+        self.assertEqual([g["parent"] for g in cat["groups"]], ["", "s-default", "s-default"])
         by_title = {b["title"]: b for b in cat["books"]}
         self.assertEqual(by_title["Dracula"]["groups"], ["s-классика"])
         self.assertEqual(by_title["Dracula"]["author"], "Bram Stoker")
@@ -91,19 +92,19 @@ class CatalogTests(unittest.TestCase):
         self.put("one.epub", make_epub("Zero", extra="0"))
         (self.books / "groups.json").write_text(json.dumps({"b": "Детям", "default": "Для Сони"}, ensure_ascii=False), encoding="utf-8")
         cat = self.build()["catalog"]
-        self.assertEqual([g["name"] for g in cat["groups"]], ["Детям", "Для Сони", "a"])
+        self.assertEqual([g["name"] for g in cat["groups"]], ["Для Сони", "Детям", "a"], "«Встроенные» первая, за ней вложенные в порядке groups.json")
 
     def test_groups_json_с_bom_из_блокнота_читается(self):
         self.put("kids/one.epub", make_epub("One"))
         (self.books / "groups.json").write_bytes("\ufeff".encode("utf-8") + json.dumps({"kids": "Детям"}, ensure_ascii=False).encode("utf-8"))
-        self.assertEqual(self.build()["catalog"]["groups"][0]["name"], "Детям")
+        self.assertEqual(self.build()["catalog"]["groups"][1]["name"], "Детям")
 
     def test_битый_groups_json_не_ломает_сборку(self):
         self.put("a/one.epub", make_epub("One"))
         (self.books / "groups.json").write_text("{не json", encoding="utf-8")
         with contextlib.redirect_stdout(io.StringIO()):
             cat = self.build()["catalog"]
-        self.assertEqual(cat["groups"][0]["name"], "a")
+        self.assertEqual(cat["groups"][1]["name"], "a")
 
     def test_обложка_в_epub2_и_epub3_название_с_пробелом_в_пути(self):
         self.put("a/two.epub", make_epub("Two", cover="epub2", extra="2"))
@@ -177,6 +178,32 @@ class CatalogTests(unittest.TestCase):
         self.assertFalse(stale.exists())
         self.assertEqual(len(json.loads((self.books / "catalog.json").read_text(encoding="utf-8"))["books"]), 1)
 
+    def test_только_подпапки_встроенные_всё_равно_есть_как_родитель(self):
+        self.put("kids/alice.epub", make_epub("Alice", extra="a"))
+        cat = self.build()["catalog"]
+        self.assertEqual([(g["id"], g["parent"]) for g in cat["groups"]], [("s-default", ""), ("s-kids", "s-default")])
+        self.assertEqual(cat["books"][0]["groups"], ["s-kids"], "книга лежит во вложенной, не в корне")
+
+    def test_пустая_подпапка_не_попадает_в_каталог(self):
+        self.put("root.epub", make_epub("Root", extra="r"))
+        (self.books / "empty").mkdir()
+        self.put("bad/bad.epub", b"nope")
+        with contextlib.redirect_stdout(io.StringIO()):
+            cat = self.build()["catalog"]
+        self.assertEqual([g["id"] for g in cat["groups"]], ["s-default"])
+
+    def test_подпапка_глубже_одной_сплющивается_с_напоминанием(self):
+        self.put("kids/fairy/tales/alice.epub", make_epub("Alice", extra="a"))
+        self.put("kids/peter.epub", make_epub("Peter", extra="p"))
+        res = self.build()
+        by = {b["title"]: b for b in res["catalog"]["books"]}
+        self.assertEqual(by["Alice"]["groups"], ["s-kids"])
+        self.assertEqual(by["Alice"]["file"], "kids/fairy/tales/alice.epub")
+        self.assertEqual(len(res["notices"]), 1)
+        self.assertIn("kids/fairy/tales/alice.epub", res["notices"][0])
+        self.assertEqual(res["warnings"], [], "книга не пропущена: напоминание не считается предупреждением")
+        self.assertEqual(sorted(g["parent"] for g in res["catalog"]["groups"]), ["", "s-default"])
+
     def test_пустая_папка_даёт_пустой_каталог(self):
         cat = self.build()["catalog"]
         self.assertEqual(cat, {"groups": [], "books": []})
@@ -197,10 +224,10 @@ class CatalogTests(unittest.TestCase):
         js = (
             "import {sanitizeCatalog} from %s; import fs from 'node:fs';"
             "const raw = JSON.parse(fs.readFileSync(%s, 'utf8')); const c = sanitizeCatalog(raw);"
-            "console.log(JSON.stringify([raw.groups.length, c.groups.length, raw.books.length, c.books.length, c.books.every(b => b.groups.length > 0 && b.cover)]))"
+            "console.log(JSON.stringify([raw.groups.length, c.groups.length, raw.books.length, c.books.length, c.books.every(b => b.groups.length > 0 && b.cover), JSON.stringify(c.groups.map(g => g.parent)) === JSON.stringify(raw.groups.map(g => g.parent))]))"
         ) % (json.dumps((ROOT / "js" / "shelf.js").as_uri()), json.dumps(str(self.books / "catalog.json")))
         out = subprocess.run(["node", "--input-type=module", "-e", js], capture_output=True, text=True, check=True).stdout
-        self.assertEqual(json.loads(out), [3, 3, 3, 3, True])
+        self.assertEqual(json.loads(out), [3, 3, 3, 3, True, True])
 
 
 if __name__ == "__main__":

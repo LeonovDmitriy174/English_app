@@ -42,9 +42,17 @@ export const PIPS = 6;
 export const RESET = { read: 1, written: 2 };
 export const ROLLOVER = 4; // сутки начинаются в 4:00 по местному времени
 
+/** Сколько ошибок после того, как слово уже было выучено, делает слово «трудным». */
+export const LEECH_LAPSES = 4;
+
 export const newSrs = (now = Date.now()) => ({ lv: 0, due: now, last: null, reps: 0, lapses: 0 });
 export const isNew = (srs) => !srs || srs.lv === 0;
 export const isMastered = (srs) => !!srs && srs.lv > PIPS;
+/**
+ * Трудное слово: ошибок накопилось много, а освоено оно пока не до конца. Слово, которое наконец усвоилось
+ * (дошло до уровня выше последней точки индикатора), из трудных уходит само.
+ */
+export const isLeech = (srs) => !!srs && srs.lapses >= LEECH_LAPSES && !isMastered(srs);
 
 /** Срок через n суток: 4:00 нужного дня по местному времени. */
 function dueInDays(now, n, rollover = ROLLOVER) {

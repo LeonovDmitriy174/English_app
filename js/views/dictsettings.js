@@ -1,4 +1,4 @@
-// dictsettings.js — настройки словаря: сколько новых слов в день и какие режимы входят в микс.
+// dictsettings.js — настройки словаря: сколько новых слов в день, какие режимы входят в микс и учитывается ли скорость ответа.
 // Тема, размер текста, озвучка и резервная копия остались в настройках приложения (settings.js).
 import { h, openSheet } from "../dom.js";
 import { app, setSetting } from "../store.js";
@@ -6,8 +6,8 @@ import { MODES, normalizeMix } from "../modes.js";
 import { canSpeak } from "../tts.js";
 import { row, stepper } from "./settings.js";
 
-/** Режимы, которые на этом устройстве вообще возможны (озвучки может не быть). */
-export const modeAvailable = (key) => key !== "listen" || canSpeak();
+/** Режимы, которые на этом устройстве вообще возможны (без озвучки нет ни Слуха, ни Диктанта). */
+export const modeAvailable = (key) => (key !== "listen" && key !== "dictation") || canSpeak();
 
 /** Режимы микса из настроек с учётом того, что доступно: хотя бы один режим есть всегда. */
 export function mixModes() {
@@ -17,6 +17,11 @@ export function mixModes() {
 
 export function openDictSettings() {
   const switches = [];
+  const speed = h("button", { class: "switch", role: "switch", "aria-label": "Учитывать скорость ответа", "aria-checked": String(app.settings.speedRule !== false) });
+  speed.addEventListener("click", async () => {
+    await setSetting("speedRule", app.settings.speedRule === false);
+    speed.setAttribute("aria-checked", String(app.settings.speedRule !== false));
+  });
 
   const paint = () => {
     const active = mixModes();
@@ -51,7 +56,9 @@ export function openDictSettings() {
       h("h3", { class: "set-sub" }, "Режимы в миксе"),
       h("p", { class: "note tight" }, "Микс чередует отмеченные режимы. Новым словам и словам на низких уровнях достаются простые задания, на высоких те, где слово нужно вспомнить самому."),
       ...MODES.map((m) => row(m.name, modeAvailable(m.key) ? m.desc : "На этом устройстве нет озвучки", modeSwitch(m))),
-      h("p", { class: "note" }, "Новое слово всегда начинается с выбора из вариантов: незнакомое слово писать рано. Выбор поднимает слово не выше третьего уровня: угадать вариант можно и не зная слова. Выше слово растёт от заданий, где его нужно написать или вписать. Если в миксе остался один Выбор, слова будут задерживаться на третьем уровне."),
+      h("p", { class: "note" }, "Новое слово всегда начинается с выбора из вариантов: незнакомое слово писать рано. Выбор поднимает слово не выше третьего уровня: угадать вариант можно и не зная слова. Выше слово растёт от заданий, где его нужно написать или вписать. Если в миксе остался один Выбор, слова будут задерживаться на третьем уровне. Диктант длиннее остальных заданий, поэтому в миксе он по умолчанию выключен: его можно включить здесь или запускать отдельным режимом."),
+      h("h3", { class: "set-sub" }, "Скорость ответа"),
+      row("Учитывать скорость", "Быстрый верный ответ поднимает слово, очень медленный оставляет на месте. Время нигде не показывается", speed),
     ),
   });
   paint();

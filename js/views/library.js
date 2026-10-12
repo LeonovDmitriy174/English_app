@@ -1,7 +1,15 @@
-// library.js — полка: группы книг, общий поиск, встроенные книги из каталога, добавление EPUB.
+// library.js — полка: папки как в «Заметках» на iPhone, общий поиск, встроенные книги из каталога, добавление EPUB.
+//
+// Экраны (адрес #/library[/папка]):
+//   список папок   «Все книги» и папки со счётчиками; у папок с вложенными есть значок свёртки;
+//   одна папка     вложенные папки сверху, ниже книги папки и всех её вложенных; «‹ Книги» возвращает назад;
+//   все книги      то, что уже лежит на устройстве.
+// Вложенность одна: внутри вложенной папки новую уже не создать (проверяет store).
 import { h, icon, toast, openSheet, closeSheet } from "../dom.js";
-import { app, subscribe, addBook, removeBook, ensureAnalysis, createGroup, renameGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset } from "../store.js";
-import { ALL, MAX_GROUP_NAME, groupChips, shelfItems, isUserGroup, fmtSize } from "../shelf.js";
+import { app, subscribe, addBook, removeBook, ensureAnalysis, createGroup, renameGroup, moveGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset, folders } from "../store.js";
+import { ALL, MAX_GROUP_NAME, isUserGroup, shelfItems, fmtSize, folderCounts, folderRows, parentChoices, pathLabel } from "../shelf.js";
+import { pageHash, folderFromHash } from "../nav.js";
+import { folderList, backLink, plural, collapsed, hasGutter } from "./folders.js";
 import { openAppSettings } from "./settings.js";
 
 const initialOf = (title) => (title || "?").trim()[0]?.toUpperCase();
@@ -32,15 +40,28 @@ function progressOf(book) {
   return { ch, total, pct: Math.round(frac * 100) };
 }
 
-/** Лист с одним полем для названия группы. submit(name) возвращает { error } или { ok: true }. */
-function askName({ title, value = "", action, submit, after }) {
-  const input = h("input", { class: "field", type: "text", value, maxlength: MAX_GROUP_NAME, placeholder: "Например, «Для сестры»", "aria-label": "Название группы", autocomplete: "off", enterkeyhint: "done" });
+/** Кнопка-«чип» с выбором: нажатая подсвечена. */
+const choiceChip = (label, on, onClick) => h("button", { class: "chip", "aria-pressed": String(on), onClick }, label);
+
+/**
+ * Лист с одним полем для названия папки. Если withPlace, под полем выбор места: верхний уровень или любая папка верхнего уровня
+ * (вложенные в этот выбор не попадают, так что глубже одной вложенности папку не создать).
+ * submit(name, place) возвращает { error } или { ok: true, … }; after получает этот результат.
+ */
+function askFolder({ title, value = "", action, parent = null, withPlace = false, submit, after }) {
+  let place = parent;
+  const input = h("input", { class: "field", type: "text", value, maxlength: MAX_GROUP_NAME, placeholder: "Например, «Для сестры»", "aria-label": "Название папки", autocomplete: "off", enterkeyhint: "done" });
   const msg = h("p", { class: "note err", role: "alert" });
+  const choices = withPlace ? parentChoices(folders()) : [];
+  const where = h("div", { class: "chips wrap", role: "group", "aria-label": "Где создать папку" });
+  const paintWhere = () =>
+    where.replaceChildren(choiceChip("Верхний уровень", place === null, () => ((place = null), paintWhere())), ...choices.map((n) => choiceChip(n.name, place === n.id, () => ((place = n.id), paintWhere()))));
+  paintWhere();
   let busy = false;
   const go = async () => {
     if (busy) return;
     busy = true;
-    const r = await submit(input.value);
+    const r = await submit(input.value, place);
     busy = false;
     if (r?.error) {
       msg.textContent = r.error;
@@ -54,16 +75,23 @@ function askName({ title, value = "", action, submit, after }) {
   input.addEventListener("input", () => (msg.textContent = ""));
   const sheet = openSheet({
     label: title,
-    content: h("div", null, h("h2", { class: "set-title" }, title), input, msg, h("div", { class: "set-actions" }, h("button", { class: "btn primary block", onClick: go }, action))),
+    content: h(
+      "div",
+      null,
+      h("h2", { class: "set-title" }, title),
+      input,
+      msg,
+      choices.length > 0 && [h("p", { class: "sheet-sub" }, "Где"), where, h("p", { class: "note tight" }, "Папка может лежать в другой папке, но только на один уровень: внутри вложенной папки новую не создать.")],
+      h("div", { class: "set-actions" }, h("button", { class: "btn primary block", onClick: go }, action)),
+    ),
   });
   setTimeout(() => input.focus(), 320);
 }
 
-// Выбранная группа помнится, пока приложение открыто: вернулись из читалки — та же полка
-let activeGroup = null;
-
-export function renderLibrary(root) {
+export function renderLibrary(root, arg = "") {
+  const folder = folderFromHash(arg); // "" — список папок, "all" — все книги, иначе id папки
   let mounted = true;
+  let leaving = false; // уходим с экрана сами (например, после удаления папки): перерисовка не нужна
   let query = "";
   refreshCatalog();
 
@@ -73,7 +101,8 @@ export function renderLibrary(root) {
     const files = [...fileInput.files];
     fileInput.value = "";
     if (!files.length) return;
-    const into = isUserGroup(activeGroup) ? [activeGroup] : [];
+    const node = folders().byId.get(folder);
+    const into = node && !node.shipped ? [node.id] : [];
     let added = 0;
     let dup = 0;
     const errors = [];
@@ -83,7 +112,7 @@ export function renderLibrary(root) {
         const r = await addBook(f, { groups: into });
         if (r.duplicate) dup += 1;
         else added += 1;
-        if (files.length === 1) toast(r.duplicate ? (into.length ? "Эта книга уже была, теперь она и в этой группе" : "Эта книга уже есть в библиотеке") : `Добавлено: ${r.book.title}`);
+        if (files.length === 1) toast(r.duplicate ? (into.length ? "Эта книга уже была, теперь она и в этой папке" : "Эта книга уже есть в библиотеке") : `Добавлено: ${r.book.title}`);
       } catch (err) {
         errors.push(err.message || "Не удалось открыть файл");
       }
@@ -103,35 +132,12 @@ export function renderLibrary(root) {
     paint();
   });
   const search = h("div", { class: "search" }, icon("search", 20), input);
-  const chipRow = h("div", { class: "chips", role: "group", "aria-label": "Группы книг" });
-  const tools = h("div", { class: "group-tools" });
-  const list = h("div");
-  const page = h(
-    "div",
-    { class: "page" },
-    h(
-      "header",
-      { class: "top" },
-      h("div", null, h("h1", { class: "title" }, "Книги")),
-      h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Добавить книгу", onClick: pick }, icon("plus", 24)), h("button", { class: "iconbtn", "aria-label": "Настройки", onClick: () => openAppSettings() }, icon("sliders", 22))),
-    ),
-    search,
-    chipRow,
-    tools,
-    list,
-    fileInput,
-  );
-  root.replaceChildren(h("main", { class: "view" }, page));
+  const head = h("div");
+  const body = h("div");
+  root.replaceChildren(h("main", { class: "view" }, h("div", { class: "page" }, head, search, body, fileInput)));
 
   const fmt = (n) => n.toLocaleString("ru-RU");
-  const shippedFirst = () => app.catalog.groups[0]?.id;
-
-  /** Какая полка открыта. Выбор делается один раз, когда уже понятно, есть ли книги и каталог. */
-  function resolveActive() {
-    if (activeGroup === null && (app.catalogLoaded || app.books.length)) activeGroup = !app.books.length && shippedFirst() ? shippedFirst() : ALL;
-    if (activeGroup && activeGroup !== ALL && ![...app.catalog.groups, ...app.groups].some((g) => g.id === activeGroup)) activeGroup = ALL; // группу удалили
-    return activeGroup ?? ALL;
-  }
+  const booksWord = (n) => `${n} ${plural(n, ["книга", "книги", "книг"])}`;
 
   // ── Действия ─────────────────────────────────────────────────────────────
   async function getFromCatalog(entry) {
@@ -146,33 +152,101 @@ export function renderLibrary(root) {
     }
   }
 
-  function newGroup({ forBook } = {}) {
-    askName({
-      title: "Новая группа",
+  /** Новая папка. parent — где она появится сразу; forBook — книга, которую надо положить в новую папку. */
+  function newFolder({ parent = null, forBook = null } = {}) {
+    askFolder({
+      title: "Новая папка",
       action: "Создать",
-      submit: async (name) => {
-        const r = await createGroup(name);
+      parent,
+      withPlace: true,
+      submit: async (name, place) => {
+        const r = await createGroup(name, place);
         if (r.error) return r;
         if (forBook) await toggleBookGroup(forBook.id, r.group.id);
         return { ok: true, group: r.group };
       },
       after: ({ group }) => {
+        if (group.parent) collapsed.delete(group.parent); // чтобы новую папку было видно
+        paint();
         if (forBook) bookMenu(forBook);
-        else {
-          activeGroup = group.id;
-          query = "";
-          input.value = "";
-          paint();
-        }
-        toast(`Группа «${group.name}» создана`);
+        toast(`Папка «${group.name}» создана`);
       },
     });
   }
 
-  function renameActive() {
-    const g = app.groups.find((x) => x.id === activeGroup);
-    if (!g) return;
-    askName({ title: "Название группы", value: g.name, action: "Сохранить", submit: (name) => renameGroup(g.id, name).then((r) => (r.error ? r : { ok: true })) });
+  function renameFolder(node) {
+    askFolder({ title: "Название папки", value: node.name, action: "Сохранить", submit: (name) => renameGroup(node.id, name).then((r) => (r.error ? r : { ok: true })) });
+  }
+
+  /** Лист «Переместить»: верхний уровень или любая папка верхнего уровня. Папке с вложенными доступен только верхний уровень. */
+  function moveFolder(node) {
+    const choices = parentChoices(folders(), node.id);
+    const msg = h("p", { class: "note err", role: "alert" });
+    const choose = async (to) => {
+      const r = await moveGroup(node.id, to);
+      if (r.error) {
+        msg.textContent = r.error;
+        return;
+      }
+      sheet.close();
+      toast("Папка перемещена");
+    };
+    const sheet = openSheet({
+      label: "Переместить папку",
+      content: h(
+        "div",
+        null,
+        h("h2", { class: "set-title" }, "Переместить"),
+        h("p", { class: "sheet-sub" }, `Куда положить «${node.name}»`),
+        h("div", { class: "chips wrap", role: "group", "aria-label": "Куда переместить" }, choiceChip("Верхний уровень", !node.parent, () => choose(null)), ...choices.map((n) => choiceChip(n.name, node.parent === n.id, () => choose(n.id)))),
+        msg,
+        !choices.length && h("p", { class: "note" }, "В этой папке есть вложенные папки, а глубже одной вложенности папки не делаются. Чтобы вложить её в другую, сначала переложите вложенные."),
+      ),
+    });
+  }
+
+  /** Лист действий над своей папкой. Удаление в два нажатия; книги всегда остаются в библиотеке. */
+  function folderMenu(node) {
+    const kids = node.children.length;
+    let armed = 0;
+    const label = (text) => del.replaceChildren(icon("trash", 20), text);
+    const del = h("button", {
+      class: "btn danger block",
+      onClick: async () => {
+        if (!armed) {
+          label("Нажмите ещё раз, чтобы удалить");
+          armed = setTimeout(() => {
+            armed = 0;
+            label("Удалить папку");
+          }, 3500);
+          return;
+        }
+        clearTimeout(armed);
+        leaving = true;
+        const n = await deleteGroup(node.id);
+        sheet.close();
+        const message = n > 1 ? `Удалено папок: ${n}. Книги остались в библиотеке` : "Папка удалена, книги остались в библиотеке";
+        window.addEventListener("hashchange", () => toast(message), { once: true }); // переход стирает старые сообщения, поэтому показываем после него
+        location.replace(pageHash("library", node.parent || ""));
+      },
+    });
+    label("Удалить папку");
+    const sheet = openSheet({
+      label: node.name,
+      content: h(
+        "div",
+        null,
+        h("h2", { class: "set-title" }, node.name),
+        h(
+          "div",
+          { class: "set-actions" },
+          h("button", { class: "btn quiet block", onClick: () => renameFolder(node) }, "Переименовать"),
+          h("button", { class: "btn quiet block", onClick: () => moveFolder(node) }, "Переместить"),
+          del,
+        ),
+        h("p", { class: "note" }, `Книги останутся в библиотеке${kids ? `, а вложенные папки (${kids}) удалятся вместе с этой` : ""}.`),
+      ),
+    });
   }
 
   async function shareUnknown(book) {
@@ -201,12 +275,15 @@ export function renderLibrary(root) {
         ]
       : null;
 
-    const groupBox = h("div", { class: "chips wrap", role: "group", "aria-label": "Группы этой книги" });
+    // Книгу можно класть только в свои папки; вложенные подписаны родителем: «Для сестры › Сказки»
+    const groupBox = h("div", { class: "chips wrap", role: "group", "aria-label": "Папки этой книги" });
     const paintGroups = () => {
       const now = app.books.find((b) => b.id === book.id) || book;
+      const tree = folders();
+      const mine = tree.roots.flatMap((r) => [r, ...r.children]).filter((n) => !n.shipped);
       groupBox.replaceChildren(
-        ...app.groups.map((g) => h("button", { class: "chip", "aria-pressed": String(!!now.groups?.includes(g.id)), onClick: async () => { await toggleBookGroup(book.id, g.id); paintGroups(); } }, g.name)),
-        h("button", { class: "chip add", onClick: () => newGroup({ forBook: book }) }, icon("plus", 16), "Новая группа"),
+        ...mine.map((n) => choiceChip(pathLabel(tree, n.id), !!now.groups?.includes(n.id), async () => { await toggleBookGroup(book.id, n.id); paintGroups(); })),
+        h("button", { class: "chip add", onClick: () => newFolder({ forBook: book }) }, icon("plus", 16), "Новая папка"),
       );
     };
     paintGroups();
@@ -218,7 +295,7 @@ export function renderLibrary(root) {
         "div",
         null,
         h("h2", { class: "set-title" }, book.title),
-        h("p", { class: "sheet-sub" }, "Группы"),
+        h("p", { class: "sheet-sub" }, "Папки"),
         groupBox,
         facts
           ? h("dl", { class: "facts" }, facts.map(([k, v]) => [h("dt", null, k), h("dd", null, v)]))
@@ -230,7 +307,7 @@ export function renderLibrary(root) {
           st?.unknown?.length ? h("button", { class: "btn quiet block", onClick: () => shareUnknown(book) }, "Скопировать список не найденных слов") : null,
           h("button", { class: "btn danger block", onClick: async () => { await removeBook(book.id); sheet.close(); toast("Книга удалена"); } }, icon("trash", 20), "Удалить книгу"),
         ),
-        h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга и ваше место в ней.", fromCatalog && " Встроенную книгу можно скачать снова из её группы."),
+        h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга и ваше место в ней.", fromCatalog && " Встроенную книгу можно скачать снова из её папки."),
       ),
     });
   }
@@ -273,88 +350,105 @@ export function renderLibrary(root) {
     );
   }
 
-  function emptyState(active) {
-    if (query.trim()) return h("section", { class: "empty" }, h("p", { class: "lead" }, "Ничего не нашлось"), h("p", null, "Поиск идёт по названиям, авторам и названиям групп во всей библиотеке и среди встроенных книг."));
-    if (isUserGroup(active)) {
-      return h("section", { class: "empty" }, h("p", { class: "lead" }, "В этой группе пока пусто"), h("p", null, "Нажмите на три точки рядом с книгой и отметьте эту группу. Книга может лежать в нескольких группах сразу. Новые книги, добавленные отсюда, попадут в эту группу."), h("button", { class: "btn primary", onClick: pick }, icon("plus", 20), "Добавить книгу"));
+  function emptyState(node) {
+    if (query.trim()) return h("section", { class: "empty" }, h("p", { class: "lead" }, "Ничего не нашлось"), h("p", null, "Поиск идёт по названиям, авторам и названиям папок во всей библиотеке и среди встроенных книг."));
+    if (node && !node.shipped) {
+      return h("section", { class: "empty" }, h("p", { class: "lead" }, "В этой папке пока пусто"), h("p", null, "Нажмите на три точки рядом с книгой и отметьте эту папку. Книга может лежать в нескольких папках сразу. Новые книги, добавленные отсюда, попадут в эту папку."), h("button", { class: "btn primary", onClick: pick }, icon("plus", 20), "Добавить книгу"));
     }
-    const shipped = app.catalog.groups.map((g) => `«${g.name}»`);
+    const shipped = folders().roots.filter((n) => n.shipped).map((n) => `«${n.name}»`);
     return h(
       "section",
       { class: "empty" },
       h("p", { class: "lead" }, "Начните с книги на английском"),
-      h("p", null, "Выберите файл EPUB. Он останется только на этом телефоне, и читать его можно без интернета. Нажимайте на незнакомые слова: перевод, произношение и пример появятся сразу.", shipped.length > 0 && ` Готовые книги ждут в ${shipped.length > 1 ? "группах" : "группе"} ${shipped.join(", ")}.`),
+      h("p", null, "Выберите файл EPUB. Он останется только на этом телефоне, и читать его можно без интернета. Нажимайте на незнакомые слова: перевод, произношение и пример появятся сразу.", shipped.length > 0 && ` Готовые книги ждут в ${shipped.length > 1 ? "папках" : "папке"} ${shipped.join(", ")}.`),
       h("button", { class: "btn primary", onClick: pick }, icon("plus", 20), "Добавить книгу"),
     );
   }
 
-  let shownGroup = null;
-  function paintChips(active) {
-    const chips = groupChips({ books: app.books, catalog: app.catalog, userGroups: app.groups });
-    const keep = chipRow.scrollLeft;
-    chipRow.replaceChildren(
-      ...chips.map((c) =>
-        h(
-          "button",
-          {
-            class: "chip",
-            "aria-pressed": String(c.id === active),
-            onClick: () => {
-              activeGroup = c.id;
-              paint();
-            },
-          },
-          c.name,
-          h("span", { class: "n" }, c.count),
-        ),
-      ),
-      h("button", { class: "chip add", "aria-label": "Новая группа", onClick: () => newGroup() }, icon("plus", 16), "Группа"),
+  const newRow = (parent, gutter = false) => h("button", { class: `f-new${gutter ? " gutter" : ""}`, onClick: () => newFolder({ parent }) }, icon("plus", 20), "Новая папка");
+
+  /** Шапка: на списке папок заголовок и кнопки в одной строке, на папке сверху строка возврата и кнопки, под ней заголовок. */
+  function paintHead({ title, sub, back, actions }) {
+    const bar = h("div", { class: "top-actions" }, actions);
+    head.replaceChildren(
+      ...[
+        back && h("div", { class: "navrow" }, backLink(back.href, back.label), bar),
+        h("header", { class: back ? "top lower" : "top" }, h("div", null, h("h1", { class: "title" }, title), sub ? h("p", { class: "sub" }, sub) : null), back ? null : bar),
+      ].filter(Boolean),
     );
-    // Ряд прокручивается только вбок: при смене группы открытая встаёт на середину, иначе остаётся где была
-    chipRow.scrollLeft = keep;
-    const on = chipRow.querySelector('[aria-pressed="true"]');
-    if (on && shownGroup !== active) {
-      const box = chipRow.getBoundingClientRect();
-      const me = on.getBoundingClientRect();
-      chipRow.scrollLeft = keep + (me.left - box.left) - (box.width - me.width) / 2;
-    }
-    shownGroup = active;
   }
 
-  function paint() {
-    if (!mounted) return;
-    const active = resolveActive();
-    const searching = query.trim().length > 0;
-    const anything = app.books.length > 0 || app.catalog.books.length > 0;
-    search.hidden = !anything;
-    chipRow.hidden = !anything || searching;
-    if (anything && !searching) paintChips(active);
+  /** Заменяет содержимое под шапкой; пустые места (false, null) пропускаются. */
+  const show = (...nodes) => body.replaceChildren(...nodes.flat().filter(Boolean));
 
-    tools.replaceChildren();
-    tools.hidden = searching || !isUserGroup(active);
-    if (!tools.hidden) {
-      let armed = 0;
-      const del = h("button", {
-        class: "linkbtn danger-link",
-        onClick: async () => {
-          if (!armed) {
-            del.textContent = "Нажмите ещё раз: книги останутся";
-            armed = setTimeout(() => {
-              armed = 0;
-              del.textContent = "Удалить группу";
-            }, 3500);
-            return;
-          }
-          clearTimeout(armed);
-          await deleteGroup(active);
-          toast("Группа удалена, книги остались в библиотеке");
-        },
-      }, "Удалить группу");
-      tools.append(h("button", { class: "linkbtn", onClick: renameActive }, "Переименовать"), del);
+  const addBtn = () => h("button", { class: "iconbtn", "aria-label": "Добавить книгу", onClick: pick }, icon("plus", 24));
+
+  function paint() {
+    if (!mounted || leaving) return;
+    const tree = folders();
+    const node = folder && folder !== ALL ? tree.byId.get(folder) : null;
+    if (folder && folder !== ALL && !node) {
+      // Папки нет: удалена, или список встроенных папок ещё не получен
+      if (app.catalogLoaded || isUserGroup(folder)) {
+        location.replace(pageHash("library"));
+        return;
+      }
+      paintHead({ title: "Книги", back: { href: pageHash("library"), label: "Книги" }, actions: [] });
+      search.hidden = true;
+      show(h("p", { class: "note" }, "Загружаю список папок…"));
+      return;
     }
 
-    const items = shelfItems({ books: app.books, catalog: app.catalog, userGroups: app.groups, active, query });
-    list.replaceChildren(items.length ? h("ul", { class: "books" }, items.map((it) => (it.kind === "book" ? bookRow(it.book) : catalogRow(it.entry)))) : emptyState(active));
+    const searching = query.trim().length > 0;
+    const anything = app.books.length > 0 || app.catalog.books.length > 0 || app.groups.length > 0;
+    search.hidden = !anything;
+    const counts = folderCounts({ books: app.books, catalog: app.catalog, tree });
+
+    // Шапка
+    if (node) {
+      const n = counts.get(node.id) || 0;
+      const parent = node.parent ? tree.byId.get(node.parent) : null;
+      paintHead({
+        title: node.name,
+        sub: n ? booksWord(n) : "",
+        back: parent ? { href: pageHash("library", parent.id), label: parent.name } : { href: pageHash("library"), label: "Книги" },
+        actions: [addBtn(), !node.shipped && h("button", { class: "iconbtn", "aria-label": `Действия: ${node.name}`, onClick: () => folderMenu(node) }, icon("more", 22))],
+      });
+    } else if (folder === ALL) {
+      paintHead({ title: "Все книги", sub: app.books.length ? booksWord(app.books.length) : "", back: { href: pageHash("library"), label: "Книги" }, actions: [addBtn()] });
+    } else {
+      paintHead({ title: "Книги", actions: [addBtn(), h("button", { class: "iconbtn", "aria-label": "Настройки", onClick: () => openAppSettings() }, icon("sliders", 22))] });
+    }
+
+    // Что под шапкой
+    const rowsOf = () => folderRows(tree, (id) => counts.get(id) || 0);
+    const bookList = (items) => h("ul", { class: "books" }, items.map((it) => (it.kind === "book" ? bookRow(it.book) : catalogRow(it.entry))));
+
+    if (searching) {
+      const items = shelfItems({ books: app.books, catalog: app.catalog, userGroups: app.groups, query });
+      show(items.length ? bookList(items) : emptyState(node));
+      return;
+    }
+    if (!folder) {
+      if (!anything) {
+        show(emptyState(null));
+        return;
+      }
+      show(
+        folderList({ all: { label: "Все книги", count: app.books.length, href: pageHash("library", ALL) }, rows: rowsOf(), hrefOf: (id) => pageHash("library", id), onToggle: paint }),
+        newRow(null, hasGutter(rowsOf())),
+        !app.books.length && h("p", { class: "note" }, "Книг на устройстве пока нет. Откройте папку с готовыми книгами или добавьте свой EPUB кнопкой «+»."),
+      );
+      return;
+    }
+    const items = shelfItems({ books: app.books, catalog: app.catalog, userGroups: app.groups, active: folder });
+    const sub = node ? rowsOf().flatMap((r) => [r, ...r.children]).find((r) => r.id === node.id)?.children || [] : [];
+    show(
+      sub.length > 0 && folderList({ rows: sub, hrefOf: (id) => pageHash("library", id) }),
+      node && !node.parent && newRow(node.id),
+      sub.length > 0 && items.length > 0 && h("h2", { class: "f-head" }, "Книги"),
+      items.length ? bookList(items) : sub.length ? null : emptyState(node),
+    );
   }
 
   paint();

@@ -859,10 +859,6 @@ p {
   border-color: var(--ink);
   color: var(--on-ink);
 }
-.chip .n {
-  opacity: 0.7;
-  font-weight: 400;
-}
 .chip.add {
   gap: 4px;
   padding: 0 14px 0 10px;
@@ -875,13 +871,126 @@ p {
   margin: 0;
   padding: 2px 0 8px;
 }
-.group-tools {
+
+/* ── Папки (как в «Заметках» на iPhone) ─────────────────────────────────── */
+.navrow {
   display: flex;
-  gap: 22px;
-  margin: -8px 0 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 10px;
 }
-.group-tools .linkbtn {
-  padding: 6px 0;
+.backlink {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 70%;
+  height: 44px;
+  margin-left: -8px;
+  padding: 0 12px 0 2px;
+  border-radius: 12px;
+  font: 500 17px var(--sans);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.backlink span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backlink:active {
+  background: var(--paper-2);
+}
+.top.lower {
+  padding-top: 4px;
+}
+.f-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+.f-list.nested {
+  margin: 0;
+  padding-left: 50px;
+}
+.f-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--rule);
+}
+.f-toggle {
+  flex: none;
+  width: 28px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.f-toggle .ico {
+  transition: transform 0.15s;
+}
+.f-toggle[aria-expanded="true"] .ico {
+  transform: rotate(90deg);
+}
+.f-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.f-link:active {
+  background: var(--paper-2);
+}
+.f-link > .ico {
+  flex: none;
+  color: var(--ink-3);
+}
+.f-link > .ico:first-child {
+  color: var(--ink-2);
+}
+.f-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 17px var(--sans);
+}
+.f-n {
+  flex: none;
+  font: 15px var(--sans);
+  color: var(--ink-3);
+}
+.f-new {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  font: 500 16px var(--sans);
+  color: var(--ink-3);
+  text-align: left;
+}
+.f-new.gutter {
+  padding-left: 28px;
+}
+.f-new .ico {
+  color: var(--ink-3);
+}
+.f-head {
+  margin: 22px 0 2px;
+  font: 600 13.5px var(--sans);
+  color: var(--ink-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .f-toggle .ico {
+    transition: none;
+  }
 }
 .sheet-sub {
   margin: 10px 0 8px;
@@ -1500,4 +1609,155 @@ p {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }
+}
+
+/* ── Повторение: короткие заходы, разминка «Пары», диктант, трудные слова ─ */
+.start-row {
+  display: flex;
+  gap: 10px;
+}
+.start-row .btn.quiet {
+  flex: none;
+}
+.start-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin-top: 2px;
+}
+.linkbtn.inline {
+  padding: 0;
+  font-size: 13.5px;
+}
+.rv-title {
+  flex: 1;
+  font: 600 16px var(--sans);
+  color: var(--ink-2);
+}
+.pairs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 18px;
+}
+.pcol {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 62px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: background 0.15s, border-color 0.15s, opacity 0.2s;
+}
+.pair.en {
+  font: 500 19px/1.25 var(--serif);
+}
+.pair.ru {
+  font: 500 15.5px/1.3 var(--sans);
+}
+.pair[aria-pressed="true"] {
+  border-color: var(--ink);
+  background: var(--sheet);
+}
+.pair.matched {
+  background: var(--ok-bg);
+  border-color: var(--pv);
+  opacity: 0.75;
+}
+.pair.matched .ico {
+  flex: none;
+  color: var(--pv);
+}
+.pair.bad {
+  background: var(--no-bg);
+  border-color: var(--id);
+}
+.answer.col {
+  flex-direction: column;
+}
+textarea.field.dictation {
+  height: auto;
+  min-height: 96px;
+  padding: 12px 14px;
+  line-height: 1.4;
+  resize: none;
+}
+textarea.copybox {
+  height: auto;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+/* Разбор диктанта: верное обычным шрифтом, правки видны и без цвета (зачёркнуто / подчёркнуто) */
+.dict-diff {
+  margin-top: 14px;
+  font: 21px/1.6 var(--serif);
+}
+.dw del {
+  color: var(--id);
+  text-decoration-thickness: 1.5px;
+}
+.dw ins {
+  color: var(--pv);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1.5px;
+}
+.dw.miss ins {
+  text-decoration-style: dotted;
+}
+.dw.key.ok,
+.dw.key.typo {
+  font-weight: 600;
+}
+.dw.key.ok {
+  text-decoration: underline;
+  text-decoration-color: var(--cat);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+/* Под ответом: ассоциация, «Это имя» */
+.trail {
+  display: grid;
+  justify-items: start;
+  margin-top: 8px;
+}
+.mnemo {
+  margin-top: 10px;
+  font: 16px/1.45 var(--serif);
+}
+.mnemo small {
+  display: block;
+  font: 13px var(--sans);
+  color: var(--ink-3);
+}
+.trail .answer {
+  width: 100%;
+  margin-top: 8px;
+}
+.slip-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  margin-top: 10px;
+}
+.edit {
+  margin-top: 12px;
+}
+.edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 10px;
 }
