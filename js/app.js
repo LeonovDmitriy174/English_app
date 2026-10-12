@@ -1,12 +1,16 @@
 // app.js — запуск, маршруты и нижняя панель вкладок.
 import { h, icon, closeSheet } from "./dom.js";
-import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, ensureContexts, reparseBooks } from "./store.js";
+import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, ensureContexts, reparseBooks, prefetchDictionary, startDictionary } from "./store.js";
+import { installErrorLog } from "./diag.js";
 import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
 import { renderReview } from "./views/review.js";
 import { renderNotes } from "./views/notes.js";
 import { remember, tabHref, lastPage } from "./nav.js";
+
+installErrorLog(); // неожиданные ошибки попадают в журнал (настройки → «Сведения для отладки»)
+prefetchDictionary(); // словарь начинает загружаться сразу, пока открывается хранилище
 
 const root = document.getElementById("app");
 const stage = h("div");
@@ -17,7 +21,9 @@ const tabs = [
   ["notes", "Заметки", "flag"],
 ];
 const tabbar = h("nav", { class: "tabbar", "aria-label": "Разделы" });
-root.append(stage, tabbar);
+// Сообщения над нижней панелью: «Доступна новая версия», «Словарь не загрузился»
+const notices = h("div", { class: "notices" });
+root.append(stage, tabbar, notices);
 
 let cleanup = null;
 let current = "library";
@@ -77,13 +83,16 @@ async function start() {
     return;
   }
   subscribe(paintTabs);
+  subscribe(paintNotices);
   window.addEventListener("hashchange", route);
   // Запуск без адреса: книги открываются там, где вы закончили (какая папка), как в «Заметках» на iPhone
   if (["", "#", "#/"].includes(location.hash) && lastPage.library !== "#/library") history.replaceState(null, "", lastPage.library);
   route();
 
   watchUpdates();
-  // Фоновая работа, когда экран уже открылся: обновить разбор старых книг, проанализировать слова,
+  // Словарь разбирается, когда первый экран уже нарисован: пока он идёт, приложение открыто, а не пусто
+  requestAnimationFrame(() => setTimeout(() => startDictionary(), 0));
+  // Фоновая работа, когда экран уже открылся: обновить разбор старых книг, проанализировать слова (после загрузки словаря),
   // затем найти в книгах предложения для заданий «Слово в предложении»
   setTimeout(async () => {
     await reparseBooks();
@@ -112,8 +121,26 @@ function watchUpdates() {
 }
 
 function showUpdate() {
-  if (document.querySelector(".update")) return;
-  document.body.append(h("div", { class: "update", role: "status" }, h("span", null, "Доступна новая версия"), h("button", { onClick: () => location.reload() }, "Обновить")));
+  if (notices.querySelector(".update")) return;
+  notices.append(h("div", { class: "update", role: "status" }, h("span", null, "Доступна новая версия"), h("button", { onClick: () => location.reload() }, "Обновить")));
+}
+
+/** Плашка «Словарь не загрузился»: без неё приложение молча показывало бы «нет в словаре» у каждого слова. */
+function paintNotices() {
+  const shown = notices.querySelector(".dict-error");
+  if (app.dict.state !== "error") {
+    shown?.remove();
+    return;
+  }
+  if (shown) return;
+  notices.prepend(
+    h(
+      "div",
+      { class: "update dict-error", role: "alert" },
+      h("span", null, "Словарь не загрузился: переводов не будет"),
+      h("button", { onClick: () => startDictionary({ retry: true }) }, "Повторить"),
+    ),
+  );
 }
 
 start();

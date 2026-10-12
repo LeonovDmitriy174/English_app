@@ -5,6 +5,7 @@ import { isNew } from "../levels.js";
 import { levelBar } from "./level.js";
 import { openSlip } from "./slip.js";
 import { openDictSettings } from "./dictsettings.js";
+import { openAddWord } from "./addword.js";
 
 const FILTERS = [
   ["all", "Все"],
@@ -42,7 +43,7 @@ export function renderDict(root) {
   const search = h("div", { class: "search" }, icon("search", 20), input);
   const controls = h("div", null, search, chips);
 
-  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), controls, list);
+  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Добавить слово", onClick: () => openAddWord() }, icon("plus", 24)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), controls, list);
   root.replaceChildren(h("main", { class: "view" }, page));
 
   function counts() {
@@ -83,8 +84,8 @@ export function renderDict(root) {
           "section",
           { class: "empty" },
           h("p", { class: "lead" }, "Словарь пока пуст"),
-          h("p", null, "Нажимайте на незнакомые слова в книге и добавляйте их сюда. Каждое слово сохранится вместе с предложением, в котором вы его встретили."),
-          h("button", { class: "btn primary", onClick: () => (location.hash = "#/library") }, "Открыть книгу"),
+          h("p", null, "Нажимайте на незнакомые слова в книге и добавляйте их сюда. Каждое слово сохранится вместе с предложением, в котором вы его встретили. Слово из фильма или разговора можно найти по-английски или по-русски и добавить кнопкой «+»."),
+          h("div", { class: "empty-actions" }, h("button", { class: "btn primary", onClick: () => (location.hash = "#/library") }, "Открыть книгу"), h("button", { class: "btn", onClick: () => openAddWord() }, icon("plus", 20), "Добавить слово")),
         ),
       );
       return;

@@ -54,12 +54,20 @@ export const isMastered = (srs) => !!srs && srs.lv > PIPS;
  */
 export const isLeech = (srs) => !!srs && srs.lapses >= LEECH_LAPSES && !isMastered(srs);
 
+/** Учебный день по местному времени, «ГГГГ-ММ-ДД»: сутки начинаются в 4:00, поэтому ночное повторение входит в предыдущий день. */
+export function studyDay(ts = Date.now(), rollover = ROLLOVER) {
+  const d = new Date(ts - rollover * HOUR);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /** Срок через n суток: 4:00 нужного дня по местному времени. */
 function dueInDays(now, n, rollover = ROLLOVER) {
   const d = new Date(now - rollover * HOUR);
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + n);
-  return d.getTime() + rollover * HOUR;
+  d.setHours(rollover, 0, 0, 0); // именно 4:00 по часам, даже если в эту ночь переводят часы
+  return d.getTime();
 }
 
 /** Когда повторить карточку, достигшую уровня lv. */

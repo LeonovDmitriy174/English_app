@@ -34,6 +34,7 @@ async function run(store, mode, fn) {
 export const db = {
   get: (store, key) => run(store, "readonly", (s) => s.get(key)),
   all: (store) => run(store, "readonly", (s) => s.getAll()),
+  count: (store) => run(store, "readonly", (s) => s.count()),
   put: (store, value) => run(store, "readwrite", (s) => s.put(value)),
   add: (store, value) => run(store, "readwrite", (s) => s.add(value)),
   del: (store, key) => run(store, "readwrite", (s) => s.delete(key)),

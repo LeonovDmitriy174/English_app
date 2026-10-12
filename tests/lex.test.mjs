@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Glossary, lemmaCandidates, tokenize, findPhrases, sentenceAt, distance } from "../js/lex.js";
 
-const entries = JSON.parse(readFileSync(new URL("../data/dict.json", import.meta.url), "utf8"));
+const entries = JSON.parse(readFileSync(new URL("./fixtures/dict-demo.json", import.meta.url), "utf8"));
 const g = new Glossary(entries);
 
 const phrasesIn = (text) => {

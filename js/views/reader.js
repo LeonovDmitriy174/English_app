@@ -1,6 +1,6 @@
 // reader.js — читалка: текст главы, нажатие на слово, подчёркивание сохранённого, прогресс.
 import { h, icon, openSheet, closeSheet } from "../dom.js";
-import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote } from "../store.js";
+import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote, dictionaryReady } from "../store.js";
 import { noteAt, notesIn, findAnchor } from "../notes.js";
 import { openNoteSheet } from "./notes.js";
 import { lastPage } from "../nav.js";
@@ -73,6 +73,7 @@ export function renderReader(root, bookId) {
   let selected = [];
   let lastY = 0;
   let saveTimer = 0;
+  let dirty = false; // после последнего сохранения читатель успел сдвинуть текст
   let raf = 0;
 
   const text = h("article", { class: "text", lang: "en" });
@@ -255,6 +256,9 @@ export function renderReader(root, bookId) {
   async function load(idx, startPara = 0) {
     slip?.close();
     chIdx = idx;
+    paras = []; // пока открывается новая глава, места старой запоминать нельзя
+    dirty = false;
+    clearTimeout(saveTimer);
     const ch = book.chapters[idx];
     titleBtn.textContent = prettyTitle(ch.title);
     text.replaceChildren(h("p", { class: "loading" }, "Открываю главу…"));
@@ -263,6 +267,7 @@ export function renderReader(root, bookId) {
     try {
       const zip = await bookZip(book.id);
       blocks = chapterBlocks(await zip.text(ch.href));
+      await dictionaryReady(); // подсветка и переводы нужны сразу; обычно словарь уже готов, а при самом первом открытии это доли секунды
     } catch (err) {
       text.replaceChildren(h("p", { class: "loading" }, err.message || "Не удалось открыть главу"));
       return;
@@ -360,6 +365,21 @@ export function renderReader(root, bookId) {
   }
 
   // ── прокрутка: панель, полоска прогресса, запоминание места ──────────────
+  // Читаемым считается абзац, который лежит на уровне 86 px от верха экрана; при открытии книги текст ставится так,
+  // чтобы нужный абзац начинался на 84 px, поэтому «открыл и закрыл» место не сдвигает.
+  const paraAt = (y) => {
+    for (let j = 0; j < paras.length; j++) if (paras[j].el.offsetTop + paras[j].el.offsetHeight > y + 86) return j;
+    return 0;
+  };
+
+  /** Запоминает место сразу, а не через полсекунды после остановки прокрутки: нужно при выходе из книги и при сворачивании. */
+  function flushProgress() {
+    clearTimeout(saveTimer);
+    if (!dirty || !paras.length) return;
+    dirty = false;
+    saveProgress(book.id, chIdx, paraAt(view.scrollTop));
+  }
+
   function onScroll() {
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
@@ -369,20 +389,16 @@ export function renderReader(root, bookId) {
       lastY = y;
       const max = view.scrollHeight - view.clientHeight;
       rprog.style.width = `${max > 0 ? (y / max) * 100 : 0}%`;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        let k = 0;
-        for (let j = 0; j < paras.length; j++) {
-          if (paras[j].el.offsetTop + paras[j].el.offsetHeight > y + 70) {
-            k = j;
-            break;
-          }
-        }
-        saveProgress(book.id, chIdx, k);
-      }, 500);
     });
+    // место запоминаем по самому прокручиванию, а не по кадру: выход из книги сразу после прокрутки не должен его терять
+    dirty = true;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushProgress, 500);
   }
   view.addEventListener("scroll", onScroll, { passive: true });
+  const onHide = () => document.visibilityState === "hidden" && flushProgress();
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", flushProgress);
 
   const off = subscribe(() => {
     mark();
@@ -392,7 +408,9 @@ export function renderReader(root, bookId) {
 
   return () => {
     off();
-    clearTimeout(saveTimer);
+    flushProgress();
+    document.removeEventListener("visibilitychange", onHide);
+    window.removeEventListener("pagehide", flushProgress);
     cancelAnimationFrame(raf);
     slip?.close();
     closeSheet();

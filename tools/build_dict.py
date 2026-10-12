@@ -46,6 +46,7 @@ DUMP_URL = "https://kaikki.org/dictionary/raw-wiktextract-data.jsonl.gz"
 DUMP_NAME = "raw-wiktextract-data.jsonl.gz"
 ENGLISH_NAME = "english-entries.jsonl.gz"
 TYPES = ("w", "pv", "id")
+MAX_ZIPF = 8.5  # выше этого частоты в природе не бывает; 9.0 у нас означает «частоты отключены»
 
 
 # ── Ручной глоссарий ───────────────────────────────────────────────────────
@@ -535,10 +536,21 @@ class Builder:
                 lemmas.sort(key=lambda x: -zs.get(("w", x), 0))
                 v["of"] = lemmas[:3]
 
+        # Частота слова (шкала Zipf, 0–8) нужна приложению, чтобы в результатах поиска частые слова шли выше редких.
+        # Для фраз частоты нет. Если частоты отключены (--no-freq), поле не пишется.
+        for key, v in items.items():
+            if key[0] != "w":
+                continue
+            z = zs.get(key)
+            if z is None or z >= 90:  # слова из ручного глоссария: считаем частоту отдельно
+                z = self.zipf(key[1])
+            if 0 < z <= MAX_ZIPF:
+                v["z"] = round(z, 1)
+
         out = []
         for key in sorted(items):
             v = items[key]
-            out.append({k: v[k] for k in ("w", "t", "pos", "ru", "en", "ex", "m", "f", "sep", "of") if k in v})
+            out.append({k: v[k] for k in ("w", "t", "pos", "ru", "en", "ex", "m", "f", "sep", "of", "z") if k in v})
         return out
 
 

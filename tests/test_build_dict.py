@@ -195,6 +195,18 @@ class Build(unittest.TestCase):
         self.assertNotIn(("w", "gleam"), self.items)  # без перевода и редкое
         self.assertNotIn(("w", "obscure"), self.items)  # слишком редкое даже с переводом
 
+    def test_frequency_is_written_for_words_only(self):
+        self.assertEqual(self.items[("w", "dog")]["z"], 4.5)
+        self.assertEqual(self.items[("w", "wand")]["z"], 3.5)
+        self.assertNotIn("z", self.items[("pv", "give up")])  # у фраз частоты нет
+        self.assertNotIn("z", self.items[("id", "kick the bucket")])
+
+    def test_frequency_is_skipped_when_disabled(self):
+        b = bd.Builder(lambda text: 9.0, min_zipf=2.4, min_zipf_noru=3.0)  # так выглядит --no-freq
+        for o in DUMP:
+            b.consume(o)
+        self.assertTrue(all("z" not in e for e in b.finish([])))
+
     def test_single_letters(self):
         self.assertIn(("w", "i"), self.items)
         self.assertIn(("w", "a"), self.items)

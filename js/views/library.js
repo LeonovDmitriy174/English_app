@@ -6,11 +6,13 @@
 //   все книги      то, что уже лежит на устройстве.
 // Вложенность одна: внутри вложенной папки новую уже не создать (проверяет store).
 import { h, icon, toast, openSheet, closeSheet } from "../dom.js";
-import { app, subscribe, addBook, removeBook, ensureAnalysis, createGroup, renameGroup, moveGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset, folders } from "../store.js";
+import { app, subscribe, addBook, removeBook, ensureAnalysis, createGroup, renameGroup, moveGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset, folders, resumeBook } from "../store.js";
 import { ALL, MAX_GROUP_NAME, isUserGroup, shelfItems, fmtSize, folderCounts, folderRows, parentChoices, pathLabel } from "../shelf.js";
 import { pageHash, folderFromHash } from "../nav.js";
 import { folderList, backLink, plural, collapsed, hasGutter } from "./folders.js";
 import { openAppSettings } from "./settings.js";
+import { backupNudge } from "./backupui.js";
+import { openBookWords } from "./bookwords.js";
 
 const initialOf = (title) => (title || "?").trim()[0]?.toUpperCase();
 const blankCover = (title) => h("div", { class: "cover blank-cover", "aria-hidden": "true" }, initialOf(title));
@@ -133,8 +135,9 @@ export function renderLibrary(root, arg = "") {
   });
   const search = h("div", { class: "search" }, icon("search", 20), input);
   const head = h("div");
+  const lead = h("div"); // под шапкой: напоминание о копии и «Продолжить чтение»
   const body = h("div");
-  root.replaceChildren(h("main", { class: "view" }, h("div", { class: "page" }, head, search, body, fileInput)));
+  root.replaceChildren(h("main", { class: "view" }, h("div", { class: "page" }, head, lead, search, body, fileInput)));
 
   const fmt = (n) => n.toLocaleString("ru-RU");
   const booksWord = (n) => `${n} ${plural(n, ["книга", "книги", "книг"])}`;
@@ -304,12 +307,27 @@ export function renderLibrary(root, arg = "") {
         h(
           "div",
           { class: "set-actions" },
+          st?.top ? h("button", { class: "btn block", onClick: () => openBookWords(book) }, icon("list", 20), "Слова этой книги") : null,
           st?.unknown?.length ? h("button", { class: "btn quiet block", onClick: () => shareUnknown(book) }, "Скопировать список не найденных слов") : null,
           h("button", { class: "btn danger block", onClick: async () => { await removeBook(book.id); sheet.close(); toast("Книга удалена"); } }, icon("trash", 20), "Удалить книгу"),
         ),
         h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга и ваше место в ней.", fromCatalog && " Встроенную книгу можно скачать снова из её папки."),
       ),
     });
+  }
+
+  /** «Продолжить чтение»: книга, на которой вы остановились, одним касанием. Показывается на списке папок и внутри папок. */
+  function resumeCard() {
+    const b = resumeBook();
+    if (!b) return null;
+    const p = progressOf(b);
+    return h(
+      "a",
+      { class: "resume", href: `#/read/${b.id}`, "aria-label": `Продолжить чтение: ${b.title}, глава ${p.ch + 1} из ${p.total}` },
+      cover(b),
+      h("div", { class: "resume-text" }, h("div", { class: "resume-label" }, "Продолжить чтение"), h("div", { class: "resume-title" }, b.title), h("div", { class: "resume-meta" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), `Глава ${p.ch + 1} из ${p.total}`)),
+      icon("next", 20),
+    );
   }
 
   // ── Отрисовка ────────────────────────────────────────────────────────────
@@ -394,6 +412,7 @@ export function renderLibrary(root, arg = "") {
         return;
       }
       paintHead({ title: "Книги", back: { href: pageHash("library"), label: "Книги" }, actions: [] });
+      lead.replaceChildren();
       search.hidden = true;
       show(h("p", { class: "note" }, "Загружаю список папок…"));
       return;
@@ -419,6 +438,9 @@ export function renderLibrary(root, arg = "") {
     } else {
       paintHead({ title: "Книги", actions: [addBtn(), h("button", { class: "iconbtn", "aria-label": "Настройки", onClick: () => openAppSettings() }, icon("sliders", 22))] });
     }
+
+    // Под шапкой: напоминание о копии и «Продолжить чтение» (в поиске и на «Все книги» не нужны)
+    lead.replaceChildren(...(searching ? [] : [backupNudge(), folder === ALL ? null : resumeCard()]).filter(Boolean));
 
     // Что под шапкой
     const rowsOf = () => folderRows(tree, (id) => counts.get(id) || 0);

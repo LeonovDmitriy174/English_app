@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { Glossary, sentencesOf } from "../js/lex.js";
 import { usable, findSpan, exampleContext, contextPool, pickContext, collectFromText, mergeFound, MAX_FOUND } from "../js/context.js";
 
-const g = new Glossary(JSON.parse(readFileSync(new URL("../data/dict.json", import.meta.url), "utf8")));
+const g = new Glossary(JSON.parse(readFileSync(new URL("./fixtures/dict-demo.json", import.meta.url), "utf8")));
 const seeded = (seed = 1) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const card = (w, t = "w", extra = {}) => ({ id: `${t}:${w}`, w, t, ctx: [], ...extra });
 const slice = (c) => c.s.slice(c.a, c.b);

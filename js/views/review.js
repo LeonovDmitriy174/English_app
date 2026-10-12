@@ -8,6 +8,7 @@ import { leechReport } from "../leech.js";
 import { createTasks } from "./tasks.js";
 import { runPairs } from "./pairs.js";
 import { openDictSettings, modeAvailable, mixModes } from "./dictsettings.js";
+import { openProgress } from "./progress.js";
 
 const plural = (n, f) => {
   const a = n % 10;
@@ -56,7 +57,7 @@ export function renderReview(root) {
     const page = h(
       "div",
       { class: "page" },
-      h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение"), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))),
+      h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение"), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Прогресс", onClick: () => openProgress() }, icon("chart", 22)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))),
     );
 
     if (!app.cards.size) {
@@ -73,6 +74,8 @@ export function renderReview(root) {
       return;
     }
 
+    // Задания берут варианты ответов и предложения из общего словаря: в самые первые секунды после запуска он ещё разбирается
+    const loading = app.dict.state === "loading";
     const scopes = hard ? [SCOPES[0], ["hard", "Трудные", hard], ...SCOPES.slice(1)] : SCOPES;
     const isHard = prefs.scope === "hard";
     page.append(
@@ -124,13 +127,13 @@ export function renderReview(root) {
       h(
         "div",
         { class: "start-row" },
-        h("button", { class: "btn primary grow", disabled: !total, onClick: () => start() }, total ? "Начать" : "Нет карточек"),
-        total > SHORT_SESSION && h("button", { class: "btn quiet", onClick: () => start(SHORT_SESSION) }, "5 минут"),
+        h("button", { class: "btn primary grow", disabled: !total || loading, onClick: () => start() }, loading ? "Загружаю словарь…" : total ? "Начать" : "Нет карточек"),
+        total > SHORT_SESSION && h("button", { class: "btn quiet", disabled: loading, onClick: () => start(SHORT_SESSION) }, "5 минут"),
       ),
       h(
         "div",
         { class: "start-extra" },
-        total >= 3 && h("button", { class: "linkbtn", onClick: warmUp }, "Разминка: пары"),
+        total >= 3 && !loading && h("button", { class: "linkbtn", onClick: warmUp }, "Разминка: пары"),
         isHard && h("button", { class: "linkbtn", onClick: copyHard }, "Скопировать трудные слова"),
       ),
     );

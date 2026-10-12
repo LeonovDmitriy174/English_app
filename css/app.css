@@ -394,6 +394,73 @@ p {
   height: 100%;
   background: var(--ink);
 }
+/* «Продолжить чтение» и напоминание о копии под шапкой библиотеки */
+.resume {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2px 0 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--paper-2);
+  color: inherit;
+  text-decoration: none;
+}
+.resume .cover {
+  width: 44px;
+  height: 66px;
+}
+.resume .cover.blank-cover {
+  font-size: 22px;
+}
+.resume-text {
+  flex: 1;
+  min-width: 0;
+}
+.resume-label {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.resume-title {
+  margin-top: 2px;
+  font: 600 17px/1.25 var(--serif);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resume-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.resume > .ico {
+  flex: none;
+  color: var(--ink-3);
+}
+.nudge {
+  margin: 2px 0 16px;
+  padding: 14px 16px 12px;
+  border: 1.5px solid var(--rule);
+  border-radius: 14px;
+}
+.nudge p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.nudge-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.note.ver {
+  font-size: 13px;
+  color: var(--ink-3);
+}
 .empty {
   padding: 40px 0 0;
 }
@@ -1567,26 +1634,41 @@ p {
   text-align: right;
 }
 
-/* Плашка «Доступна новая версия» */
-.update {
+/* Сообщения над нижней панелью («Доступна новая версия», «Словарь не загрузился») стоят в одном столбце */
+.notices {
   position: fixed;
   z-index: 70;
+  left: 12px;
+  right: 12px;
   bottom: calc(var(--tab-h) + var(--safe-b) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.immersive .notices {
+  bottom: calc(var(--safe-b) + 16px);
+}
+/* пока открыт нижний лист (настройки, карточка слова), сообщения не загораживают его */
+body:has(.sheet.open) .notices {
+  visibility: hidden;
+}
+.update {
   display: flex;
   align-items: center;
   gap: 14px;
-  max-width: calc(100% - 24px);
+  max-width: 100%;
   padding: 6px 6px 6px 16px;
   border-radius: 14px;
   background: var(--ink);
   color: var(--on-ink);
   font: 500 14.5px var(--sans);
   white-space: nowrap;
+  pointer-events: auto;
 }
-.immersive .update {
-  bottom: calc(var(--safe-b) + 16px);
+.update.dict-error {
+  white-space: normal;
 }
 .update button {
   min-height: 38px;
@@ -1760,4 +1842,237 @@ textarea.copybox {
   align-items: center;
   gap: 18px;
   margin-top: 10px;
+}
+
+/* ── Добавление слова ───────────────────────────────────────────────────── */
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+/* Высота окна постоянная, чтобы строка поиска не прыгала, пока список результатов меняется */
+.sheet.addword {
+  height: 84vh;
+  height: 84dvh;
+}
+.addword .sheet-body {
+  flex: 1;
+  min-height: 0;
+}
+.aw-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -22px;
+  padding: 0 22px 4px;
+  background: var(--sheet);
+}
+.aw-top .search {
+  margin: 10px 0 6px;
+}
+.aw-top .search input {
+  height: 50px;
+  padding-right: 46px;
+  font-size: 17px;
+}
+.aw-top .search .ico {
+  top: 15px;
+}
+.aw-clear {
+  position: absolute;
+  right: 2px;
+  top: 3px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.aw-body {
+  padding-top: 4px;
+}
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hit {
+  border-bottom: 1px solid var(--rule);
+}
+.hit-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hit-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  padding: 12px 0;
+  text-align: left;
+}
+.hit-pos {
+  margin-left: 8px;
+  font: 500 12.5px var(--sans);
+  letter-spacing: 0;
+  color: var(--cat);
+}
+.row-ru.auto {
+  font-style: italic;
+  color: var(--ink-3);
+}
+.hit.open .row-ru {
+  white-space: normal;
+}
+.hit-via {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.addbtn {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+}
+.addbtn:active:not([disabled]) {
+  background: var(--paper-2);
+}
+.addbtn.saved {
+  border-color: transparent;
+  background: var(--ok-bg);
+  color: var(--pv);
+}
+.hit-more {
+  padding: 0 0 16px 17px;
+}
+.hit-more .exl {
+  margin-top: 10px;
+}
+.hit-more .meta {
+  margin-top: 10px;
+}
+.aw-foot {
+  padding-top: 6px;
+}
+.aw-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+/* «Знаю» в списке «Слова этой книги»: тише, чем «+» */
+.dismissbtn {
+  flex: none;
+  width: 40px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.dismissbtn:active {
+  color: var(--ink);
+}
+
+/* ── Прогресс ───────────────────────────────────────────────────────────── */
+.prog-tiles {
+  display: flex;
+  gap: 28px;
+  margin: 12px 0 6px;
+}
+.prog-tiles b {
+  display: block;
+  font: 700 34px/1.1 var(--serif);
+  letter-spacing: -0.02em;
+}
+.prog-tiles span {
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+.spread {
+  display: flex;
+  height: 14px;
+  gap: 2px;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.spread i {
+  min-width: 4px;
+}
+.g-new {
+  background: var(--rule);
+}
+.g-learning {
+  background: var(--sel-w);
+  box-shadow: inset 0 0 0 1.5px var(--word);
+}
+.g-known {
+  background: var(--word);
+}
+.g-mastered {
+  background: var(--pv);
+}
+.spread-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 12px 0 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.spread-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.spread-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.spread-legend b {
+  margin-left: 2px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.days {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 84px;
+  margin-top: 8px;
+}
+.day {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.day i {
+  display: block;
+  width: 100%;
+  border-radius: 3px 3px 1px 1px;
+  background: var(--ink-3);
+  opacity: 0.45;
+}
+.day.now i {
+  background: var(--ink);
+  opacity: 1;
+}
+.days-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.progress .facts {
+  margin-top: 14px;
 }

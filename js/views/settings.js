@@ -1,7 +1,11 @@
 // settings.js — настройки приложения: тема, размер текста, подсветка, озвучка, резервная копия. Настройки словаря в dictsettings.js.
-import { h, openSheet, toast } from "../dom.js";
-import { app, setSetting, exportData, importData, APP_NAME } from "../store.js";
+import { h, openSheet, toast, copyText } from "../dom.js";
+import { app, setSetting, importData, diagnosticsReport, APP_NAME } from "../store.js";
 import { isPersisted } from "../db.js";
+import { ageLabel } from "../backup.js";
+import { APP_VERSION, buildLabel } from "../build.js";
+import { errorLog } from "../diag.js";
+import { saveBackup } from "./backupui.js";
 
 const THEMES = [
   ["auto", "Как в системе"],
@@ -87,15 +91,24 @@ export function openAppSettings() {
     }
   });
 
+  // «Последняя копия: вчера»: так видно, пора ли сохранять новую
+  const when = h("p", { class: "note tight" });
+  const paintWhen = () => (when.textContent = app.backup.at ? `Последняя копия: ${ageLabel(app.backup.at)}.` : "Копий данных ещё не было.");
+  paintWhen();
   const save = async () => {
-    const blob = new Blob([await exportData()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = h("a", { href: url, download: `ember-backup-${new Date().toLocaleDateString("sv")}.json` });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
+    await saveBackup();
+    paintWhen();
   };
+
+  // Версия, сборка и «сведения для отладки»: их можно скопировать и отправить вместе с рассказом о проблеме
+  const report = async () => {
+    const text = await diagnosticsReport();
+    if (await copyText(text)) return toast("Сведения скопированы");
+    const area = h("textarea", { class: "field copybox", readonly: true, rows: 12, "aria-label": "Сведения для отладки" }, text);
+    openSheet({ label: "Сведения для отладки", content: h("div", null, h("h2", { class: "set-title" }, "Сведения для отладки"), h("p", { class: "note tight" }, "Выделите текст и скопируйте его."), area) });
+    area.select();
+  };
+  const errors = errorLog.count();
 
   return openSheet({
     label: "Настройки",
@@ -105,9 +118,11 @@ export function openAppSettings() {
       h("h2", { class: "set-title" }, "Настройки"),
       ...common(),
       h("div", { class: "set-actions" }, h("button", { class: "btn quiet block", onClick: save }, "Сохранить копию данных"), h("button", { class: "btn quiet block", onClick: () => fileInput.click() }, "Загрузить копию данных"), fileInput),
+      when,
       h("p", { class: "note" }, `${APP_NAME} хранит книги и словарь только на этом устройстве. `, persisted),
       // Большой словарь собран из Викисловаря (tools/build_dict.py --wiktionary); маленький демо-словарь написан вручную
       app.glossary.list.length > 1500 && h("p", { class: "note" }, "Переводы, определения и примеры в словаре взяты из английского Викисловаря (wiktionary.org) через проект wiktextract; лицензия CC BY-SA 4.0."),
+      h("p", { class: "note ver" }, `${APP_NAME} ${APP_VERSION}, сборка ${buildLabel}. `, h("button", { class: "linkbtn", onClick: report }, errors ? `Сведения для отладки (ошибок: ${errors})` : "Сведения для отладки")),
     ),
   });
 }

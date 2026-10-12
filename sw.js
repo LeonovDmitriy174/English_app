@@ -8,20 +8,43 @@
 const BUILD = "__BUILD__";
 const DEV = BUILD.startsWith("__");
 const CACHE = `ember-${DEV ? "dev" : BUILD}`;
+
+// Словарь большой (до десятков мегабайт) и меняется редко, поэтому у него свой кэш с именем по отпечатку содержимого.
+// Отпечаток при публикации подставляет тот же workflow: пока словарь не менялся, новые версии приложения его заново не скачивают.
+const DICT = "__DICT__";
+const DICT_FILE = "data/dict.json";
+const DICT_CACHE = `ember-dict-${DEV ? "dev" : DICT}`;
+
 const FILES = [
   "./",
   "index.html",
   "manifest.webmanifest",
   "css/app.css",
-  "data/dict.json",
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/apple-touch-icon.png",
   "js/app.js",
   "js/dom.js",
   "js/db.js",
+  "js/build.js",
+  "js/backup.js",
+  "js/diag.js",
   "js/store.js",
+  "js/store/state.js",
+  "js/store/lexicon.js",
+  "js/store/settings.js",
+  "js/store/cards.js",
+  "js/store/contexts.js",
+  "js/store/books.js",
+  "js/store/folders.js",
+  "js/store/catalog.js",
+  "js/store/notes.js",
+  "js/store/data.js",
   "js/lex.js",
+  "js/rustem.js",
+  "js/bookwords.js",
+  "js/progress.js",
+  "js/dictsearch.js",
   "js/levels.js",
   "js/session.js",
   "js/choices.js",
@@ -54,33 +77,41 @@ const FILES = [
   "js/views/level.js",
   "js/views/notes.js",
   "js/views/folders.js",
+  "js/views/backupui.js",
+  "js/views/addword.js",
+  "js/views/hits.js",
+  "js/views/bookwords.js",
+  "js/views/progress.js",
 ];
 
-// Установка: кладём все файлы в новый кэш. cache: "reload" — мимо HTTP-кэша браузера,
-// иначе в только что опубликованной версии могли бы оказаться файлы десятиминутной давности.
+// Установка: кладём все файлы приложения в новый кэш, а словарь в свой, если такого ещё нет. cache: "reload" — мимо HTTP-кэша
+// браузера, иначе в только что опубликованной версии могли бы оказаться файлы десятиминутной давности.
+async function download(file) {
+  const res = await fetch(new Request(file, { cache: "reload" }));
+  if (!res.ok) throw new Error(`${file}: ${res.status}`);
+  return res;
+}
+
 self.addEventListener("install", (e) => {
   e.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) =>
-        Promise.all(
-          FILES.map(async (f) => {
-            const res = await fetch(new Request(f, { cache: "reload" }));
-            if (!res.ok) throw new Error(`${f}: ${res.status}`);
-            await cache.put(f, res);
-          }),
-        ),
-      )
-      .then(() => self.skipWaiting()),
+    (async () => {
+      const [cache, dicts] = await Promise.all([caches.open(CACHE), caches.open(DICT_CACHE)]);
+      const needDict = DEV || !(await dicts.match(DICT_FILE)); // в режиме разработки словарь берём заново: он мог измениться
+      await Promise.all([
+        ...FILES.map(async (f) => cache.put(f, await download(f))),
+        needDict && download(DICT_FILE).then((res) => dicts.put(DICT_FILE, res)),
+      ]);
+      await self.skipWaiting();
+    })(),
   );
 });
 
-// Активация: удаляем кэши прошлых версий. Данные пользователя (IndexedDB) не затрагиваются.
+// Активация: удаляем кэши прошлых версий и старых словарей. Данные пользователя (IndexedDB) не затрагиваются.
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("ember-") && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("ember-") && k !== CACHE && k !== DICT_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

@@ -1,6 +1,8 @@
 # Публикация сайта на GitHub Pages при каждом пуше в main.
-# Что делает: подставляет в sw.js номер коммита (так телефон узнаёт, что вышла новая версия)
-# и выкладывает только файлы приложения и встроенные книги (books/), без .venv, tests, tools и data-src.
+# Что делает: сначала прогоняет тесты и проверяет синтаксис всех файлов (если что-то не так, сайт не публикуется и на телефон
+# ничего не попадает), потом подставляет в sw.js и js/build.js номер коммита (так телефон узнаёт, что вышла новая версия),
+# а в sw.js ещё и отпечаток словаря (пока словарь не менялся, телефон не скачивает его заново), и выкладывает только файлы
+# приложения и встроенные книги (books/), без .venv, tests, tools и data-src.
 #
 # Один раз включить: репозиторий на GitHub → Settings → Pages → Source: «GitHub Actions».
 name: Опубликовать приложение
@@ -20,7 +22,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Проверка: те же тесты, что вы запускаете у себя (npm test и npm run test:dict), плюс разбор каждого файла JavaScript.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Тесты JavaScript
+        run: npm test
+
+      - name: Синтаксис всех файлов JavaScript
+        run: |
+          for f in sw.js $(find js -name '*.js'); do
+            node --check "$f" || exit 1
+          done
+
+      - name: Тесты Python (словарь и каталог книг)
+        run: python3 -m unittest tests/test_build_dict.py tests/test_translate_glosses.py tests/test_build_catalog.py
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -46,9 +75,11 @@ jobs:
           cp -r index.html manifest.webmanifest sw.js css js data icons _site/
           cp -r books _site/books
           rm -f _site/books/README.md _site/books/groups.json
-          sed -i "s/__BUILD__/${GITHUB_SHA::7}/" _site/sw.js
-          if grep -q "__BUILD__" _site/sw.js; then echo "Маркер версии не заменён" && exit 1; fi
-          grep -n "const BUILD" _site/sw.js
+          DICT=$(sha256sum _site/data/dict.json | cut -c1-10)
+          sed -i "s/__BUILD__/${GITHUB_SHA::7}/" _site/sw.js _site/js/build.js
+          sed -i "s/__DICT__/${DICT}/" _site/sw.js
+          if grep -q "__BUILD__\|__DICT__" _site/sw.js _site/js/build.js; then echo "Маркер версии или словаря не заменён" && exit 1; fi
+          grep -n "const BUILD\|const DICT =" _site/sw.js _site/js/build.js
 
       - uses: actions/configure-pages@v5
 
