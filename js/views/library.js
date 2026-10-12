@@ -14,6 +14,7 @@ import { openAppSettings } from "./settings.js";
 import { backupNudge } from "./backupui.js";
 import { openBookWords } from "./bookwords.js";
 import { cover, blankCover } from "./cover.js";
+import { bookProgressBlock } from "./charts.js";
 import { bookProgress, isFinished } from "../reading.js";
 
 /** Обложка книги из каталога: лежит рядом с приложением. Нет обложки или нет сети — буква, как у книг без обложки. */
@@ -282,6 +283,7 @@ export function renderLibrary(root, arg = "") {
         "div",
         null,
         h("h2", { class: "set-title" }, book.title),
+        bookProgressBlock(book, app.activity),
         h("p", { class: "sheet-sub" }, "Папки"),
         groupBox,
         facts

@@ -9,6 +9,7 @@ import { fmtDuration } from "../activity.js";
 import { prettyTitle } from "../epub.js";
 import { plural } from "./folders.js";
 import { cover } from "./cover.js";
+import { sparkline } from "./charts.js";
 import { openProgress } from "./progress.js";
 import { openAddWord } from "./addword.js";
 import { openAppSettings } from "./settings.js";
@@ -110,14 +111,18 @@ export function renderHome(root) {
 
   // ── Итоги ───────────────────────────────────────────────────────────────
   function ledger(s) {
+    // у «Выучено слов» рядом с числом маленькая кривая за 30 дней и прирост: растёт словарь или стоит
+    const trend = s.learnedTrend;
+    const gain = trend ? trend[trend.length - 1] - trend[0] : 0;
+    const base = s.words.total ? `из ${s.words.total.toLocaleString("ru-RU")} в словаре` : "в словаре пока пусто";
     const rows = [
-      ["Выучено слов", s.words.learned, s.words.total ? `из ${s.words.total.toLocaleString("ru-RU")} в словаре` : "в словаре пока пусто"],
+      ["Выучено слов", s.words.learned, gain > 0 ? `${base}, +${gain} за 30 дней` : base, trend && sparkline(trend)],
       ["Прочитано книг", s.books.finished, s.books.total ? `из ${s.books.total} на полке${s.books.reading ? `, ещё ${s.books.reading} читается` : ""}` : "книг на полке нет"],
       ["Прочитано слов", s.wordsRead ? fmtWords(s.wordsRead) : "0", "по вашему месту в книгах"],
       ["Чтение за неделю", fmtDuration(s.weekReadSec), s.todayReadSec >= 60 ? `сегодня ${fmtDuration(s.todayReadSec)}` : "сегодня пока нет"],
       ["Повторений за неделю", s.weekReviews, s.todayReviews ? `сегодня ${s.todayReviews}` : "сегодня пока нет"],
     ];
-    return h("dl", { class: "h-ledger" }, rows.map(([k, v, sub]) => h("div", { class: "h-row" }, h("dt", null, k, h("small", null, sub)), h("dd", null, v))));
+    return h("dl", { class: "h-ledger" }, rows.map(([k, v, sub, spark]) => h("div", { class: "h-row" }, h("dt", null, k, h("small", null, sub)), h("dd", { class: spark ? "has-spark" : null }, spark, v))));
   }
 
   function paint() {

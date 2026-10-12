@@ -64,6 +64,17 @@ export function wordsRead(book) {
   return Math.round(total * (isFinished(book) ? 1 : readFraction(book)));
 }
 
+export const MAX_STEP_WORDS = 1200; // за один сдвиг вперёд больше не считаем: это прыжок по оглавлению, а не чтение
+
+/**
+ * Сколько слов прочитано при сдвиге места с from на to ({ ch, p, f? }): нужно для темпа чтения. Назад и на слишком большой шаг — 0
+ * (прыжок вперёд по оглавлению или по заметке не считается чтением).
+ */
+export function wordsStep(book, from, to) {
+  const delta = (readFraction({ ...book, progress: to }) - readFraction({ ...book, progress: from })) * bookWords(book);
+  return delta > 0 && delta <= MAX_STEP_WORDS ? delta : 0;
+}
+
 /** Сводка по полке: сколько книг прочитано, сколько читается сейчас и сколько слов прочитано всего. */
 export function shelfStats(books) {
   let finished = 0;

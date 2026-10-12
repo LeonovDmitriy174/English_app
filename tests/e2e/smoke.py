@@ -143,6 +143,13 @@ def main():
         page.wait_for_selector(".sheet.open")
         page.keyboard.press("Escape")
         page.wait_for_timeout(350)
+        page.click(".h-more")  # «Подробный прогресс»: календарь и столбики рисуются всегда, кривая слов только когда есть выученные
+        page.wait_for_selector(".sheet.open .prog rect.hm")
+        check(page.locator(".sheet.open .days .day").count() == 14, "в «Прогрессе» календарь занятий и столбики за 14 дней")
+        page.locator(".sheet.open .chip", has_text="Чтение").click()
+        check(page.inner_text(".sheet.open .chart-cap >> nth=-1").startswith("За 14 дней: чтение"), "переключатель столбиков на «Чтение» работает")
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(350)
         data = json.loads(page.evaluate("import('/js/store.js').then((s) => s.exportData())"))
         check(data["app"] == "ember-chronicle-backup" and len(data["cards"]) == 2, f"копия данных читается, карточек: {len(data['cards'])}")
         check(errors == [], f"ошибок в странице нет: {errors}")

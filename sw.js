@@ -48,6 +48,7 @@ const FILES = [
   "js/progress.js",
   "js/activity.js",
   "js/reading.js",
+  "js/charts.js",
   "js/home.js",
   "js/dictsearch.js",
   "js/levels.js",
@@ -87,6 +88,7 @@ const FILES = [
   "js/views/hits.js",
   "js/views/bookwords.js",
   "js/views/progress.js",
+  "js/views/charts.js",
   "js/views/home.js",
   "js/views/cover.js",
 ];

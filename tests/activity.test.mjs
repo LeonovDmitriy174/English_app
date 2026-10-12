@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeActivity, addRead, mergeActivity, readOn, readDays, readTotal, fmtDuration, createClock, TICK_SEC, IDLE_SEC, MIN_ACTIVE_SEC } from "../js/activity.js";
+import { normalizeActivity, addRead, addWords, wordsOn, mergeActivity, readOn, readDays, readTotal, fmtDuration, createClock, TICK_SEC, IDLE_SEC, MIN_ACTIVE_SEC } from "../js/activity.js";
 
 test("нормализация: только настоящие дни и конечные положительные числа", () => {
   assert.deepEqual(normalizeActivity(undefined), { read: {} });
@@ -65,4 +65,36 @@ test("часы чтения: время идёт, пока вы что-то де
   assert.equal(c.tick(1000 + 5000, false), 0, "окно скрыто");
   c.touch(200000);
   assert.equal(c.tick(203000, true), TICK_SEC, "новое касание снова запускает время");
+});
+
+test("слова по дням: ключа нет, пока слов не набралось; мусор отбрасывается", () => {
+  assert.deepEqual(normalizeActivity({ read: { "2026-10-12": 60 } }), { read: { "2026-10-12": 60 } }, "старые данные остаются такими же");
+  assert.deepEqual(normalizeActivity({ read: {}, words: {} }), { read: {} });
+  const a = normalizeActivity({ read: {}, words: { "2026-10-12": 840.6, "2026-10-11": -3, "вчера": 5, "2026-10-10": "9", "2026-10-09": 9999999 } });
+  assert.deepEqual(a.words, { "2026-10-12": 841, "2026-10-09": 200000 });
+  const act = { read: {} };
+  addWords(act, "2026-10-12", 120.5);
+  addWords(act, "2026-10-12", 30);
+  addWords(act, "2026-10-12", 0);
+  addWords(act, "2026-10-12", NaN);
+  addWords(act, "не день", 50);
+  assert.deepEqual(act, { read: {}, words: { "2026-10-12": 150.5 } });
+  assert.equal(wordsOn(act, "2026-10-12"), 150.5);
+  assert.equal(wordsOn(act, "2026-10-11"), 0);
+  assert.equal(wordsOn(undefined, "2026-10-11"), 0);
+  assert.deepEqual(addWords({ read: {} }, "2026-10-12", -5), { read: {} }, "пустой ключ words не появляется");
+});
+
+test("слияние слов по дням: большее значение, повторная загрузка ничего не удваивает", () => {
+  const mine = { read: { "2026-10-12": 100 }, words: { "2026-10-12": 300, "2026-10-11": 500 } };
+  const theirs = { read: {}, words: { "2026-10-12": 900, "2026-10-11": 500, "2026-10-10": 40 } };
+  const once = mergeActivity(mine, theirs);
+  assert.deepEqual(once.activity.words, { "2026-10-12": 900, "2026-10-11": 500, "2026-10-10": 40 });
+  assert.equal(once.changed, 2);
+  const twice = mergeActivity(once.activity, theirs);
+  assert.deepEqual(twice.activity, once.activity);
+  assert.equal(twice.changed, 0);
+  assert.deepEqual(mergeActivity({ read: { "2026-10-12": 5 } }, theirs).activity.words, theirs.words, "в старых данных слов не было — берутся из копии");
+  assert.deepEqual(mergeActivity(mine, { read: {} }).activity, mine, "копия без слов ничего не стирает");
+  assert.deepEqual(mine.words, { "2026-10-12": 300, "2026-10-11": 500 }, "исходные данные не меняются");
 });

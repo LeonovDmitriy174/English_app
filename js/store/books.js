@@ -3,11 +3,12 @@ import { db, requestPersistence } from "../db.js";
 import { readEpub, EPUB_PARSER } from "../epub.js";
 import { openZip } from "../zip.js";
 import { analyzeBook, statsSignature } from "../analysis.js";
-import { isFinished, placeToKeep } from "../reading.js";
+import { isFinished, placeToKeep, wordsStep } from "../reading.js";
 import { isUserGroup } from "../shelf.js";
 import { app, emit } from "./state.js";
 import { dictionaryReady } from "./lexicon.js";
 import { persistNotes } from "./notes.js";
+import { addReadingWords } from "./activity.js";
 
 // ── Книги ─────────────────────────────────────────────────────────────────
 /**
@@ -83,6 +84,11 @@ export async function saveProgress(id, ch, p, f) {
   // иначе «открыл и закрыл» каждый раз сдвигало бы место и переписывало запись книги.
   const same = prev.ch === ch && prev.p === p;
   const frac = Number.isFinite(f) ? (same && Number.isFinite(prev.f) && Math.abs(f - prev.f) < 0.01 ? prev.f : Math.min(1, Math.max(0, Math.round(f * 1000) / 1000))) : prev.ch === ch ? prev.f : 0;
+  // Слова, прочитанные этим сдвигом вперёд, идут в темп чтения. Прыжок по оглавлению или по заметке (доля не передана) не считается.
+  if (Number.isFinite(f)) {
+    const step = wordsStep(b, prev, { ch, p, f: frac });
+    if (step) addReadingWords(step);
+  }
   if (prev.ch === ch && prev.p === p && prev.f === frac && resumeBook() === b && now - b.opened < 10 * 60000) return;
   b.progress = { ch, p, ...(frac === undefined ? {} : { f: frac }), ...(prev.done ? { done: prev.done } : {}) };
   b.opened = now;

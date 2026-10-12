@@ -1,6 +1,6 @@
 // activity.js (store) — время чтения по дням: читалка раз в несколько секунд добавляет время, здесь оно копится и сохраняется.
 import { db } from "../db.js";
-import { addRead } from "../activity.js";
+import { addRead, addWords } from "../activity.js";
 import { app, emit, today } from "./state.js";
 
 let saveTimer = 0;
@@ -21,6 +21,13 @@ const persist = async () => {
 /** Добавляет секунды чтения к сегодняшнему дню. Запись на устройство идёт не чаще раза в полминуты, а при выходе из книги сразу (flushActivity). */
 export function addReadingTime(sec) {
   addRead(app.activity, today(), sec);
+  unsaved = true;
+  if (!saveTimer) saveTimer = setTimeout(persist, 30000);
+}
+
+/** Добавляет прочитанные слова к сегодняшнему дню (для темпа чтения); записывается так же, как время. */
+export function addReadingWords(n) {
+  addWords(app.activity, today(), n);
   unsaved = true;
   if (!saveTimer) saveTimer = setTimeout(persist, 30000);
 }

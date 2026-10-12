@@ -63,6 +63,18 @@ test("сводка для главной", () => {
   assert.equal(s.weekReviews, 4);
   assert.equal(s.todayReadSec, 600);
   assert.equal(s.weekReadSec, 600 + 1800, "чтение пятого числа в неделю не входит");
+  // кривая для главной: у карточек без номера и без журнала день — по последнему ответу, а то и по сегодняшнему
+  assert.equal(s.learnedTrend.length, 30);
+  assert.equal(s.learnedTrend.at(-1), s.words.learned, "последняя точка равна числу выученных слов");
+});
+
+test("кривая для главной появляется вместе с первым выученным словом; Map.values() можно передавать", () => {
+  assert.equal(homeSummary({ cards: [card(2), card(3)], now: NOW }).learnedTrend, null);
+  const cards = new Map([["w:a", { id: "w:a", ...card(5) }], ["w:b", { id: "w:b", ...card(1) }]]);
+  const s = homeSummary({ cards: cards.values(), log: [{ id: "w:a", t: at(8), lv: 4, result: "ok" }], now: NOW });
+  assert.equal(s.words.total, 2);
+  assert.equal(s.words.learned, 1);
+  assert.deepEqual(s.learnedTrend.slice(-7), [0, 0, 1, 1, 1, 1, 1], "выучено 8 октября");
 });
 
 test("пустая сводка не падает и ничего не придумывает", () => {

@@ -1,17 +1,14 @@
-// progress.js — окно «Прогресс»: слова по уровням, повторения за две недели, серия дней. Расчёты: js/progress.js.
+// progress.js — окно «Прогресс»: кривая «Выучено слов», календарь занятий, слова по уровням, повторения и чтение за две недели, серия дней.
+// Расчёты: js/progress.js и js/charts.js, рисунки: js/views/charts.js.
 // Здесь нет ни времени следующих повторений, ни таймеров: только то, что уже сделано.
 import { h, openSheet } from "../dom.js";
 import { app } from "../store.js";
 import { db } from "../db.js";
-import { GROUPS, levelSpread, reviewsByDay, studyDays, streakOf, accuracy, shortDate } from "../progress.js";
+import { GROUPS, levelSpread, reviewsByDay, studyDays, streakOf, accuracy } from "../progress.js";
+import { activityGrid, learnedSeries, readByDay, plural, HEAT_WEEKS } from "../charts.js";
+import { heatmap, learnedCurve, daysChart } from "./charts.js";
 
 const DAYS = 14;
-
-const plural = (n, f) => {
-  const a = n % 10;
-  const b = n % 100;
-  return f[b > 10 && b < 20 ? 2 : a === 1 ? 0 : a >= 2 && a <= 4 ? 1 : 2];
-};
 
 export async function openProgress() {
   const body = h("div", { class: "prog" }, h("h2", { class: "set-title" }, "Прогресс"));
@@ -25,7 +22,7 @@ export async function openProgress() {
   if (!sheet.el.isConnected) return sheet; // окно закрыли, пока читался журнал
 
   const spread = levelSpread(app.cards.values());
-  if (!spread.total && !log.length) {
+  if (!spread.total && !log.length && !Object.keys(app.activity.read).length) {
     body.append(h("p", { class: "note" }, "Здесь появится ваш прогресс, когда вы добавите слова и начнёте их повторять."));
     return sheet;
   }
@@ -35,7 +32,8 @@ export async function openProgress() {
   const today = rows[rows.length - 1];
   const run = streakOf(studyDays(log, app.activity), now);
   const acc = accuracy(rows);
-  const max = Math.max(1, ...rows.map((r) => r.n));
+  const cards = [...app.cards.values()];
+  const curve = learnedSeries(cards, log, now);
 
   body.append(
     h(
@@ -44,16 +42,15 @@ export async function openProgress() {
       h("div", null, h("b", null, spread.total), h("span", null, plural(spread.total, ["слово в словаре", "слова в словаре", "слов в словаре"]))),
       h("div", null, h("b", null, spread.mastered), h("span", null, "освоено")),
     ),
+    h("p", { class: "sheet-sub" }, "Выучено слов"),
+    curve ? learnedCurve(curve) : h("p", { class: "note" }, "Кривая появится, когда первое слово дойдёт до уровня «Знаю»."),
+    h("p", { class: "sheet-sub" }, `Занятия за ${HEAT_WEEKS} недель`),
+    heatmap(activityGrid(log, app.activity, now)),
     h("p", { class: "sheet-sub" }, "Слова по уровням"),
     h("div", { class: "spread", role: "img", "aria-label": GROUPS.map((g) => `${g.label}: ${spread[g.key]}`).join(", ") }, GROUPS.map((g) => (spread[g.key] ? h("i", { class: `g-${g.key}`, style: { flexGrow: String(spread[g.key]) } }) : null))),
     h("ul", { class: "spread-legend" }, GROUPS.map((g) => h("li", null, h("i", { class: `g-${g.key}` }), g.label, h("b", null, spread[g.key])))),
-    h("p", { class: "sheet-sub" }, `Повторения за ${DAYS} дней`),
-    h(
-      "div",
-      { class: "days", role: "img", "aria-label": `Повторений по дням, последний день ${today.n}` },
-      rows.map((r, i) => h("div", { class: `day${i === rows.length - 1 ? " now" : ""}`, title: `${shortDate(r.day)}: ${r.n}` }, h("i", { style: { height: `${r.n ? Math.max(6, Math.round((r.n / max) * 100)) : 3}%` } }))),
-    ),
-    h("div", { class: "days-axis" }, h("span", null, shortDate(rows[0].day)), h("span", null, "сегодня")),
+    h("p", { class: "sheet-sub" }, `За ${DAYS} дней`),
+    daysChart(rows, readByDay(app.activity, now, DAYS)),
     h(
       "dl",
       { class: "facts" },

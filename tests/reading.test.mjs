@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFraction, chapterIndex, isFinished, atEnd, almostDone, bookWords, wordsRead, shelfStats, bookProgress, mergeProgress, placeToKeep, fmtWords, totalChars, CHARS_PER_WORD } from "../js/reading.js";
+import { readFraction, chapterIndex, isFinished, atEnd, almostDone, bookWords, wordsRead, shelfStats, bookProgress, mergeProgress, placeToKeep, fmtWords, totalChars, wordsStep, MAX_STEP_WORDS, CHARS_PER_WORD } from "../js/reading.js";
 
 const book = (chars, progress, extra = {}) => ({ chapters: chars.map((n, i) => ({ href: `c${i}.xhtml`, title: `Chapter ${i + 1}`, chars: n })), progress, ...extra });
 
@@ -100,4 +100,19 @@ test("при удалении книги запоминается место, о
   assert.deepEqual(placeToKeep(book([1000, 1000], { ch: 0, p: 3 })), { ch: 0, p: 3 }, "доли прокрутки нет (запись старой версии): остаётся как есть");
   assert.deepEqual(placeToKeep(book([1000, 1000], { ch: 1, p: 9, f: 1, done: 1700000000000 })), { ch: 1, p: 9, f: 1, done: 1700000000000 });
   assert.deepEqual(placeToKeep(book([1000], { ch: 0, p: 0, done: 5 })), { ch: 0, p: 0, done: 5 }, "прочитана, хотя место в начале (отметили вручную)");
+});
+
+test("слова, прочитанные за сдвиг места: только вперёд и не прыжком", () => {
+  const b = book([5900, 5900], undefined, { stats: { tokens: 2000 } }); // 2000 слов на две главы по 1000
+  const at = (ch, f) => ({ ch, p: 0, f });
+  const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-6, `${msg}: ${a}`);
+  near(wordsStep(b, at(0, 0), at(0, 0.25)), 250, "четверть главы — 250 слов");
+  near(wordsStep(b, at(0, 0.9), at(1, 0.05)), 150, "через границу глав: остаток первой и начало второй");
+  assert.equal(wordsStep(b, at(0, 0.5), at(0, 0.2)), 0, "назад не считается");
+  assert.equal(wordsStep(b, at(0, 0.5), at(0, 0.5)), 0);
+  assert.equal(wordsStep(b, at(0, 0), at(1, 0.9)), 0, "скачок по оглавлению больше предела: не чтение");
+  assert.equal(wordsStep(b, at(0, 0), at(1, 0)) <= MAX_STEP_WORDS, true);
+  const long = book([59000], undefined, { stats: { tokens: 10000 } });
+  near(wordsStep(long, at(0, 0.1), at(0, 0.1 + (MAX_STEP_WORDS - 1) / 10000)), MAX_STEP_WORDS - 1, "почти предел ещё считается");
+  assert.equal(wordsStep(long, at(0, 0.1), at(0, 0.1 + (MAX_STEP_WORDS + 50) / 10000)), 0);
 });

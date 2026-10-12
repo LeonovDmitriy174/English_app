@@ -2081,6 +2081,13 @@ textarea.copybox {
   background: var(--ink);
   opacity: 1;
 }
+.chips + .days {
+  margin-top: -4px;
+}
+.day.sel i {
+  background: var(--word);
+  opacity: 1;
+}
 .days-axis {
   display: flex;
   justify-content: space-between;
@@ -2090,6 +2097,153 @@ textarea.copybox {
 }
 .progress .facts {
   margin-top: 14px;
+}
+
+/* ── Графики: календарь занятий, кривая слов, столбики, карта книги ──────── */
+.chart {
+  touch-action: pan-y; /* вертикаль прокручивает окно, а ведение пальцем вбок выбирает день или точку */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 8px;
+}
+.chart:focus-visible {
+  outline: 2px solid var(--word);
+  outline-offset: 4px;
+}
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.chart .ax {
+  font: 12px var(--sans);
+  fill: var(--ink-3);
+}
+.chart-cap {
+  min-height: 1.5em;
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.hm {
+  fill: var(--rule);
+  fill-opacity: 0.6;
+}
+.hm.l1 {
+  fill: var(--word);
+  fill-opacity: 0.28;
+}
+.hm.l2 {
+  fill: var(--word);
+  fill-opacity: 0.5;
+}
+.hm.l3 {
+  fill: var(--word);
+  fill-opacity: 0.75;
+}
+.hm.l4 {
+  fill: var(--word);
+  fill-opacity: 1;
+}
+.hm.now {
+  stroke: var(--ink-3);
+  stroke-width: 1.2;
+}
+.hm.sel {
+  stroke: var(--ink);
+  stroke-width: 1.8;
+}
+.cv-base,
+.cv-grid {
+  stroke: var(--rule);
+  stroke-width: 1.2;
+}
+.cv-grid {
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+.cv-line {
+  fill: none;
+  stroke: var(--word);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: cv-draw 0.9s ease-out 0.15s forwards;
+}
+@keyframes cv-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+.cv-dot {
+  fill: var(--word);
+}
+.cv-mark {
+  opacity: 0;
+}
+.cv-mark.on {
+  opacity: 1;
+}
+.cv-mark line {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+.cv-mark circle {
+  fill: var(--sheet);
+  stroke: var(--word);
+  stroke-width: 2.2;
+}
+.bookmap {
+  margin: 12px 0 4px;
+}
+.bookstrip {
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bookstrip svg {
+  display: block;
+  width: 100%;
+  height: 12px;
+}
+.bs-bg {
+  fill: var(--rule);
+}
+.bs-fill {
+  fill: var(--word);
+}
+.spark {
+  display: block;
+  flex: none;
+  width: 72px;
+  height: 24px;
+  color: var(--word);
+}
+.spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.spark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.spark circle {
+  fill: currentColor;
 }
 
 /* ── Главная ────────────────────────────────────────────────────────────── */
@@ -2318,6 +2472,11 @@ a.btn {
   margin-top: 2px;
   font-size: 13px;
   color: var(--ink-3);
+}
+.h-row dd.has-spark {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 .h-row dd {
   margin: 0;

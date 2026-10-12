@@ -1,24 +1,32 @@
 // activity.js — чтение по дням: сколько секунд книга была открыта и вы с ней что-то делали (листали, нажимали на слова).
 // Это нужно главной странице: серия дней и время чтения за неделю. Чистые функции без DOM (tests/activity.test.mjs).
 //
-// Данные лежат в kv «activity» как { read: { "2026-10-12": 1260, … } }: секунды по учебным дням (сутки с 4:00, как в levels.js).
+// Данные лежат в kv «activity» как { read: { "2026-10-12": 1260, … }, words?: { "2026-10-12": 840, … } }: секунды чтения и прочитанные слова
+// по учебным дням (сутки с 4:00, как в levels.js). Слова нужны для темпа чтения («в таком темпе дочитаете…»); ключа words нет, пока слов не набралось.
 // Время идёт, пока окно видно и последнее касание или прокрутка были не раньше минуты назад: открытая и забытая книга не считается.
 
 export const TICK_SEC = 5; // как часто читалка добавляет время
 export const IDLE_SEC = 60; // после стольких секунд без касаний время не идёт
 export const MIN_ACTIVE_SEC = 60; // с какого времени чтения день считается занятым (для серии)
 const MAX_DAY_SEC = 86400;
+const MAX_DAY_WORDS = 200000; // выше за день не прочитать: защита от мусора в данных
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Приводит прочитанное из хранилища или из копии к нормальному виду: только настоящие дни и конечные числа. */
 export function normalizeActivity(raw) {
-  const read = {};
-  const src = raw && typeof raw === "object" && raw.read && typeof raw.read === "object" ? raw.read : {};
-  for (const [day, sec] of Object.entries(src)) {
-    if (!DAY.test(day) || !Number.isFinite(sec) || sec <= 0) continue;
-    read[day] = Math.min(Math.round(sec), MAX_DAY_SEC);
-  }
-  return { read };
+  const clean = (src, max) => {
+    const out = {};
+    if (!src || typeof src !== "object") return out;
+    for (const [day, v] of Object.entries(src)) {
+      if (!DAY.test(day) || !Number.isFinite(v) || v <= 0) continue;
+      const n = Math.min(Math.round(v), max);
+      if (n > 0) out[day] = n;
+    }
+    return out;
+  };
+  const read = clean(raw && typeof raw === "object" ? raw.read : null, MAX_DAY_SEC);
+  const words = clean(raw && typeof raw === "object" ? raw.words : null, MAX_DAY_WORDS);
+  return Object.keys(words).length ? { read, words } : { read };
 }
 
 /** Прибавляет секунды чтения к дню. Меняет и возвращает act. */
@@ -28,21 +36,32 @@ export function addRead(act, day, sec) {
   return act;
 }
 
+/** Прибавляет прочитанные слова к дню (дробные части копятся, округляются при загрузке). Меняет и возвращает act. */
+export function addWords(act, day, n) {
+  if (!DAY.test(day) || !Number.isFinite(n) || n <= 0) return act;
+  act.words ||= {};
+  act.words[day] = Math.min((act.words[day] || 0) + n, MAX_DAY_WORDS);
+  return act;
+}
+
 /** Слияние двух записей (например, из копии данных): по каждому дню берётся большее время, а не сумма, чтобы повторная загрузка копии ничего не удваивала. */
 export function mergeActivity(a, b) {
   const out = normalizeActivity(a);
-  const other = normalizeActivity(b).read;
+  const other = normalizeActivity(b);
   let changed = 0;
-  for (const [day, sec] of Object.entries(other)) {
-    if ((out.read[day] || 0) < sec) {
-      out.read[day] = sec;
-      changed += 1;
+  for (const key of ["read", "words"]) {
+    for (const [day, v] of Object.entries(other[key] || {})) {
+      if ((out[key]?.[day] || 0) < v) {
+        (out[key] ||= {})[day] = v;
+        changed += 1;
+      }
     }
   }
   return { activity: out, changed };
 }
 
 export const readOn = (act, day) => act?.read?.[day] || 0;
+export const wordsOn = (act, day) => act?.words?.[day] || 0;
 
 /** Дни, в которые читали не меньше minSec секунд. */
 export function readDays(act, minSec = MIN_ACTIVE_SEC) {

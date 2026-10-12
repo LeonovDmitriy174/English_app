@@ -4,6 +4,7 @@ import { studyDay } from "./levels.js";
 import { levelSpread, lastDays, reviewsByDay, studyDays, streakOf, bestStreak } from "./progress.js";
 import { readOn, readTotal } from "./activity.js";
 import { shelfStats } from "./reading.js";
+import { learnedRecent } from "./charts.js";
 
 const WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
@@ -15,6 +16,7 @@ export const weekdayShort = (day) => WEEKDAYS[new Date(+day.slice(0, 4), +day.sl
  * Возвращает всё, что показывает главная.
  */
 export function homeSummary({ cards = [], books = [], log = [], activity = { read: {} }, now = Date.now() } = {}) {
+  cards = [...cards]; // могли передать и перебираемый объект (Map.values()): он нужен нам дважды
   const spread = levelSpread(cards);
   const days = studyDays(log, activity);
   const week = lastDays(now, 7);
@@ -23,6 +25,7 @@ export function homeSummary({ cards = [], books = [], log = [], activity = { rea
   const shelf = shelfStats(books);
   return {
     words: { total: spread.total, learned: spread.known + spread.mastered, learning: spread.learning, fresh: spread.new, mastered: spread.mastered },
+    learnedTrend: learnedRecent(cards, log, now, 30), // выученных слов в конце каждого из последних 30 дней или null, пока их нет
     books: { total: shelf.total, finished: shelf.finished, reading: shelf.reading },
     wordsRead: shelf.words,
     streak: streakOf(days, now),
