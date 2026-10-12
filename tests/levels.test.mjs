@@ -93,3 +93,20 @@ test("перенос карточек из старого формата (FSRS)"
   assert.equal(fromLegacy({ state: 3, step: 0, due: T0, last: T0, lapses: 2 }).lapses, 2);
   assert.equal(WAITS.length, 10);
 });
+
+test("потолок: верный ответ не поднимает слово выше потолка задания и не отнимает уже набранное", () => {
+  let s = { lv: 2, due: T0, last: T0, reps: 2, lapses: 0 };
+  s = answer(s, "ok", { now: T0, cap: 3 });
+  assert.equal(s.lv, 3);
+  s = answer(s, "ok", { now: T0, cap: 3 });
+  assert.equal(s.lv, 3, "на потолке уровень не растёт");
+  assert.equal(s.reps, 4, "но повторение засчитывается");
+  const high = answer({ lv: 6, due: T0, last: T0, reps: 9, lapses: 0 }, "ok", { now: T0, cap: 3 });
+  assert.equal(high.lv, 6, "слово выше потолка остаётся на своём уровне, а не падает");
+  assert.equal(answer(newSrs(T0), "ok", { now: T0, cap: 3 }).lv, 1);
+});
+
+test("потолок не мешает ошибке: сброс работает как обычно", () => {
+  const s = answer({ lv: 5, due: T0, last: T0, reps: 9, lapses: 0 }, "no", { now: T0, cap: 3 });
+  assert.equal(s.lv, 1);
+});

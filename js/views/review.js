@@ -1,12 +1,11 @@
-// review.js — повторение словаря: выбор ответа, написание, слово в предложении, микс.
+// review.js — повторение словаря: стартовый экран, ход одного захода и итог. Сами задания в tasks.js.
 import { h, icon } from "../dom.js";
-import { app, subscribe, queue, answerCard, kindClass, posLabel } from "../store.js";
-import { isNew } from "../levels.js";
-import { levelBar } from "./level.js";
-import { distance } from "../lex.js";
-import { speak, canSpeak } from "../tts.js";
-import { buildChoices, optionText } from "../choices.js";
+import { app, subscribe, queue, answerCard, ensureContexts, kindClass } from "../store.js";
 import { newTracker, judgeInSession, requeuePosition } from "../session.js";
+import { MODES, pickTask } from "../modes.js";
+import { canSpeak } from "../tts.js";
+import { createTasks } from "./tasks.js";
+import { openDictSettings, modeAvailable, mixModes } from "./dictsettings.js";
 
 const plural = (n, f) => {
   const a = n % 10;
@@ -14,12 +13,6 @@ const plural = (n, f) => {
   return f[b > 10 && b < 20 ? 2 : a === 1 ? 0 : a >= 2 && a <= 4 ? 1 : 2];
 };
 
-const MODES = [
-  ["mix", "Микс", "Новые слова с вариантами ответа, дальше режимы чередуются"],
-  ["choice", "Выбор", "Видите слово и выбираете перевод из четырёх вариантов"],
-  ["spell", "Написание", "Видите перевод и пишете слово по-английски"],
-  ["cloze", "Слово в предложении", "Вставляете пропущенное слово в предложение из книги"],
-];
 const SCOPES = [
   ["all", "Все"],
   ["w", "Слова"],
@@ -28,59 +21,34 @@ const SCOPES = [
 ];
 const prefs = { mode: "mix", scope: "all" };
 
-const normAnswer = (s) =>
-  s
-    .toLowerCase()
-    .replace(/[’‘`]/g, "'")
-    .replace(/[^a-z' -]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-const wordCount = (s) => s.trim().split(/\s+/).length;
-
-function clozeOk(card) {
-  const ctx = card.ctx?.[0];
-  if (!ctx) return false;
-  return wordCount(ctx.s.slice(ctx.a, ctx.b)) === wordCount(card.w);
-}
-
-/** Начиная с этого уровня в миксе остаются только письменные режимы: угадать слово по буквам нельзя. */
-const WRITE_FROM = 4;
-
-function pickMode(card) {
-  const m = prefs.mode;
-  if (m === "choice" || m === "spell") return m;
-  const cloze = clozeOk(card);
-  if (m === "cloze") return cloze ? "cloze" : "choice";
-  if (isNew(card.srs)) return "choice";
-  const pool = card.srs.lv >= WRITE_FROM ? ["spell"] : ["choice", "spell"];
-  if (cloze) pool.push("cloze", "cloze");
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-/** Оценка ответа: 'ok' | 'near' | 'no'. */
-function judge(answer, expected) {
-  const a = normAnswer(answer);
-  const e = normAnswer(expected);
-  if (!a) return "no";
-  if (a === e) return "ok";
-  const d = distance(a, e);
-  return d === 1 || (e.length >= 8 && d === 2) ? "near" : "no";
+/** Режимы стартового экрана: микс и отдельные режимы (без тех, что недоступны на этом устройстве). */
+function modeList() {
+  const mix = mixModes();
+  const all = MODES.filter((m) => modeAvailable(m.key));
+  const names = mix.map((k) => MODES.find((m) => m.key === k).name);
+  const desc = mix.length === all.length ? "Все режимы, от простого к сложному" : `Только: ${names.join(", ")}`;
+  return [["mix", "Микс", desc], ...all.map((m) => [m.key, m.name, m.short])];
 }
 
 export function renderReview(root) {
   let session = null;
   const view = h("main", { class: "view" });
   root.replaceChildren(view);
+  ensureContexts(); // в фоне, пока вы на этом экране: найти в книгах предложения для заданий «Слово в предложении»
 
   // ── стартовый экран ─────────────────────────────────────────────────────
   function home() {
     session = null;
     view.className = "view";
     document.body.classList.remove("immersive");
+    if (prefs.mode !== "mix" && !modeAvailable(prefs.mode)) prefs.mode = "mix";
     const q = queue(prefs.scope);
     const total = q.list.length;
-    const page = h("div", { class: "page" }, h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение")));
+    const page = h(
+      "div",
+      { class: "page" },
+      h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение"), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))),
+    );
 
     if (!app.cards.size) {
       page.append(
@@ -104,7 +72,7 @@ export function renderReview(root) {
       h(
         "div",
         { class: "modes", role: "radiogroup", "aria-label": "Режим" },
-        MODES.map(([key, name, desc]) =>
+        modeList().map(([key, name, desc]) =>
           h(
             "button",
             {
@@ -148,7 +116,8 @@ export function renderReview(root) {
   function start() {
     const q = queue(prefs.scope);
     if (!q.list.length) return;
-    session = { ids: q.list.map((c) => c.id), i: 0, done: 0, right: 0, tracker: newTracker() };
+    const modes = prefs.mode === "mix" ? mixModes() : [prefs.mode];
+    session = { ids: q.list.map((c) => c.id), i: 0, done: 0, right: 0, tracker: newTracker(), modes };
     nextCard();
   }
 
@@ -173,36 +142,14 @@ export function renderReview(root) {
     );
   }
 
-  function headword(card, big = true, lv = card.srs.lv, gained = false) {
-    return h(
-      "div",
-      { class: "slip-head", style: { borderBottom: "0", paddingBottom: "0" } },
-      h("div", null, h("h2", { class: big ? "rv-hw" : "hw" }, card.w), h("p", { class: "meta" }, posLabel(card)), h("p", { class: "meta lvl-line" }, levelBar(lv, gained))),
-      canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(card.w) }, icon("speaker", 24)),
-    );
-  }
-
-  function quote(card) {
-    const ctx = card.ctx?.[0];
-    if (!ctx) return null;
-    return [
-      h("blockquote", { class: "cite" }, ctx.s.slice(0, ctx.a), h("mark", null, ctx.s.slice(ctx.a, ctx.b)), ctx.s.slice(ctx.b)),
-      h("p", { class: "src" }, [ctx.book, ctx.ch].filter(Boolean).join(", ")),
-    ];
-  }
-
-  function answerBlock(card) {
-    return [card.ru ? h("p", { class: "ru" }, card.ru) : card.rm && h("p", { class: "ru auto" }, card.rm), card.en && h("p", { class: "def" }, card.en), quote(card), card.ex && h("p", { class: "exl" }, h("small", null, "Пример"), card.ex)];
-  }
-
   /**
    * Записывает ответ и ведёт сессию дальше. Время и уровень пользователю не показываются, кроме индикатора.
    * Правило захода (session.js): слово поднимается не больше чем на уровень за заход, а после ошибки
    * возвращается ещё раз, чтобы закрепить ответ, но уровень от этого уже не растёт.
    */
-  async function record(card, result, written) {
+  async function record(card, result, task, ctxText = "") {
     const { effective, requeue } = judgeInSession(session.tracker, card.id, result);
-    const res = await answerCard(card.id, effective, { written });
+    const res = await answerCard(card.id, effective, { task, ctxText });
     session.done += 1;
     if (result === "ok") session.right += 1;
     session.i += 1;
@@ -210,7 +157,7 @@ export function renderReview(root) {
     return res;
   }
 
-  const nextBtn = () => h("button", { class: "btn primary block", onClick: nextCard }, "Дальше");
+  const tasks = createTasks({ view, frame, record, next: () => nextCard() });
 
   function nextCard() {
     if (session.i >= session.ids.length) return finish();
@@ -219,165 +166,9 @@ export function renderReview(root) {
       session.i += 1;
       return nextCard();
     }
-    const mode = pickMode(card);
-    if (mode === "spell") return spell(card);
-    if (mode === "cloze") return cloze(card);
-    return choice(card);
+    const task = pickTask({ lv: card.srs.lv, modes: session.modes, can: (t) => tasks.can(card, t) });
+    tasks.run(task, card);
   }
-
-  // Режим 1: выбор. Слово (и фраза из книги) и четыре варианта, верный только один.
-  function choice(card) {
-    const built = buildChoices(card, app.glossary, app.cards);
-    if (!built || built.options.length < 3) return spell(card); // в словаре не нашлось, из чего выбирать
-    const { options, kind } = built;
-    let answered = false;
-    const q = quote(card);
-    const list = h(
-      "div",
-      { class: "choices", role: "group", "aria-label": kind === "en" ? "Варианты определения" : "Варианты перевода" },
-      options.map((o) => h("button", { class: "opt", onClick: () => pick(o) }, h("span", { class: "t" }, o.text))),
-    );
-    const after = h("div", { class: "rv-after" });
-    const prompt = h("p", { class: "rv-hint" }, kind === "en" ? "Выберите определение" : "Выберите перевод");
-    frame(
-      card,
-      h("div", { class: "rv-body choose" }, headword(card), q && h("div", { class: "rv-ctx" }, q), prompt, after, list),
-      null,
-    );
-
-    async function pick(chosen) {
-      if (answered) return;
-      answered = true;
-      list.classList.add("locked");
-      prompt.remove();
-      const res = await record(card, chosen.ok ? "ok" : "no", false);
-      [...list.children].forEach((b, i) => {
-        const o = options[i];
-        b.classList.add(o.ok ? "right" : o === chosen ? "wrong" : "dim");
-        if (o.ok || o === chosen) b.append(icon(o.ok ? "check" : "close", 20));
-      });
-      view.querySelector(".lvl-line")?.replaceChildren(levelBar(res.after, res.after > res.before));
-      // Если вариант на кнопке обрезан, полный текст показываем под вопросом
-      const full = card[kind];
-      if (full && optionText(card, kind) !== full) after.append(h("p", { class: kind === "ru" ? "ru" : "ru auto" }, full));
-      if (kind !== "en" && card.en) after.append(h("p", { class: "def" }, card.en));
-      if (card.ex) after.append(h("p", { class: "exl" }, h("small", null, "Пример"), card.ex));
-      view.querySelector(".rv-foot").append(nextBtn());
-      focusNext();
-      if (app.settings.speakOnTap) speak(card.w);
-    }
-  }
-
-  // Режим 2: написание по переводу
-  function spell(card) {
-    const input = h("input", { class: "field en", type: "text", placeholder: "По-английски", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", enterkeyhint: "done", "aria-label": "Ответ" });
-    const hint = h("p", { class: "rv-hint" });
-    let hinted = false;
-    const showHint = h(
-      "button",
-      {
-        class: "linkbtn",
-        onClick: () => {
-          hinted = true;
-          hint.textContent = `Начинается на «${card.w[0]}», символов: ${card.w.length}`;
-          showHint.remove();
-          input.focus();
-        },
-      },
-      "Подсказка",
-    );
-    const check = () => finish(input.value);
-    const give = h("button", { class: "linkbtn", onClick: () => finish("") }, "Не помню");
-    input.addEventListener("keydown", (e) => e.key === "Enter" && check());
-
-    frame(
-      card,
-      h(
-        "div",
-        { class: "rv-body" },
-        h("p", { class: "meta" }, posLabel(card)),
-        h("p", { class: "ru", style: { fontSize: "28px", marginTop: "10px" } }, card.ru || card.rm || card.en),
-        (card.ru || card.rm) && card.en && h("p", { class: "def" }, card.en),
-        hint,
-        h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
-        h("div", { style: { display: "flex", gap: "20px" } }, showHint, give),
-      ),
-      null,
-    );
-    setTimeout(() => input.focus(), 60);
-
-    async function finish(value) {
-      const verdict = judge(value, card.w);
-      // верно, но с подсказкой, и «почти»: уровень остаётся прежним
-      const result = verdict === "ok" ? (hinted ? "near" : "ok") : verdict === "near" ? "near" : "no";
-      const res = await record(card, result, true);
-      const fb =
-        verdict === "ok"
-          ? h("div", { class: "fb ok" }, "Верно")
-          : verdict === "near"
-            ? h("div", { class: "fb no" }, "Почти. Правильно: ", h("span", { class: "was" }, card.w))
-            : h("div", { class: "fb no" }, value.trim() ? "Не совпало. Правильно: " : "Правильный ответ: ", h("span", { class: "was" }, card.w));
-      frame(card, h("div", { class: "rv-body" }, headword(card, false, res.after, res.after > res.before), fb, h("div", { style: { marginTop: "6px" } }, answerBlock(card))), nextBtn());
-      focusNext();
-      if (app.settings.speakOnTap) speak(card.w);
-    }
-  }
-
-  // Режим 3: слово в предложении
-  function cloze(card) {
-    const ctx = card.ctx[0];
-    const expected = ctx.s.slice(ctx.a, ctx.b);
-    const input = h("input", { class: "field en", type: "text", placeholder: "Слово", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", enterkeyhint: "done", "aria-label": "Пропущенное слово" });
-    const check = () => finish(input.value);
-    input.addEventListener("keydown", (e) => e.key === "Enter" && check());
-    const give = h("button", { class: "linkbtn", onClick: () => finish("") }, "Не помню");
-
-    frame(
-      card,
-      h(
-        "div",
-        { class: "rv-body" },
-        h("p", { class: "meta" }, posLabel(card)),
-        h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("span", { class: "blank", "aria-label": "пропуск" }), ctx.s.slice(ctx.b)),
-        h("p", { class: "rv-hint" }, `Подсказка: ${card.ru || card.rm || card.en}`),
-        h("div", { class: "answer" }, input, h("button", { class: "btn primary", onClick: check }, "Проверить")),
-        h("div", null, give),
-      ),
-      null,
-    );
-    setTimeout(() => input.focus(), 60);
-
-    async function finish(value) {
-      let verdict = judge(value, expected);
-      let note = null;
-      if (verdict !== "ok" && normAnswer(value) === normAnswer(card.w)) {
-        verdict = "near";
-        note = "Слово верное, но в предложении другая форма: ";
-      }
-      const result = verdict === "ok" ? "ok" : verdict === "near" ? "near" : "no";
-      const res = await record(card, result, true);
-      const fb =
-        verdict === "ok"
-          ? h("div", { class: "fb ok" }, "Верно")
-          : h("div", { class: "fb no" }, note || (verdict === "near" ? "Почти. В предложении: " : value.trim() ? "Не совпало. В предложении: " : "В предложении: "), h("span", { class: "was" }, expected));
-      frame(
-        card,
-        h(
-          "div",
-          { class: "rv-body" },
-          h("p", { class: "meta" }, posLabel(card)),
-          h("p", { class: "cloze" }, ctx.s.slice(0, ctx.a), h("mark", null, expected), ctx.s.slice(ctx.b)),
-          fb,
-          h("div", { style: { marginTop: "6px" } }, h("h2", { class: "hw" }, card.w), (card.ru ? h("p", { class: "ru" }, card.ru) : card.rm && h("p", { class: "ru auto" }, card.rm)), card.en && h("p", { class: "def" }, card.en), h("p", { class: "meta lvl-line" }, levelBar(res.after, res.after > res.before))),
-        ),
-        nextBtn(),
-      );
-      focusNext();
-      if (app.settings.speakOnTap) speak(ctx.s);
-    }
-  }
-
-  const focusNext = () => setTimeout(() => view.querySelector(".rv-foot .btn")?.focus(), 30);
 
   function finish() {
     view.className = "view";

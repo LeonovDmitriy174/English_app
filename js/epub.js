@@ -179,3 +179,21 @@ function blocksOf(doc) {
   walk(doc.body);
   return blocks;
 }
+
+const SMALL = new Set(["a", "an", "the", "of", "in", "on", "at", "to", "and", "or", "but", "for", "with", "from", "by"]);
+
+/** «2. THE VANISHING GLASS» → «2. The Vanishing Glass» (только если заголовок набран капсом). */
+export function prettyTitle(s) {
+  if (!s || s !== s.toUpperCase() || !/[A-Z]{2}/.test(s)) return s;
+  let first = true;
+  return s
+    .toLowerCase()
+    .split(/(\s+)/)
+    .map((w) => {
+      if (!/[a-z]/.test(w)) return w;
+      const keep = !first && SMALL.has(w);
+      first = false;
+      return keep ? w : w.replace(/[a-z]/, (c) => c.toUpperCase());
+    })
+    .join("");
+}

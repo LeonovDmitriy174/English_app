@@ -1,6 +1,6 @@
 // app.js — запуск, маршруты и нижняя панель вкладок.
 import { h, icon, closeSheet } from "./dom.js";
-import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, reparseBooks } from "./store.js";
+import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, ensureContexts, reparseBooks } from "./store.js";
 import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
@@ -78,10 +78,12 @@ async function start() {
   route();
 
   watchUpdates();
-  // Фоновая работа, когда экран уже открылся: обновить разбор старых книг, затем проанализировать слова
+  // Фоновая работа, когда экран уже открылся: обновить разбор старых книг, проанализировать слова,
+  // затем найти в книгах предложения для заданий «Слово в предложении»
   setTimeout(async () => {
     await reparseBooks();
-    ensureAnalysis();
+    await ensureAnalysis();
+    ensureContexts();
   }, 600);
 }
 

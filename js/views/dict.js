@@ -4,6 +4,7 @@ import { app, subscribe, kindClass } from "../store.js";
 import { isNew } from "../levels.js";
 import { levelBar } from "./level.js";
 import { openSlip } from "./slip.js";
+import { openDictSettings } from "./dictsettings.js";
 
 const FILTERS = [
   ["all", "Все"],
@@ -40,7 +41,7 @@ export function renderDict(root) {
   const search = h("div", { class: "search" }, icon("search", 20), input);
   const controls = h("div", null, search, chips);
 
-  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub)), controls, list);
+  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), controls, list);
   root.replaceChildren(h("main", { class: "view" }, page));
 
   function counts() {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Glossary } from "../js/lex.js";
-import { buildChoices, optionText, kindOf } from "../js/choices.js";
+import { buildChoices, buildWordChoices, promptText, optionText, kindOf } from "../js/choices.js";
 
 // маленький генератор случайных чисел, чтобы тесты были повторяемыми
 const seeded = (seed = 1) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
@@ -100,4 +100,69 @@ test("большой словарь: подбор быстрый", () => {
   const t0 = performance.now();
   for (let i = 0; i < 200; i++) buildChoices(big.list[i * 7], big, [], { rng: seeded(i + 1) });
   assert.ok(performance.now() - t0 < 1500, `200 вопросов за ${(performance.now() - t0).toFixed(0)} мс`);
+});
+
+// ── Выбор английского слова ───────────────────────────────────────────────
+test("слово по переводу: четыре разных английских слова, верное одно", () => {
+  const r = buildWordChoices(entry("dog"), g, [], { rng: seeded(5) });
+  assert.equal(r.kind, "word");
+  assert.equal(r.options.length, 4);
+  assert.equal(r.options.filter((o) => o.ok).length, 1);
+  assert.equal(r.options.find((o) => o.ok).text, "dog");
+  assert.equal(new Set(r.options.map((o) => o.text.toLowerCase())).size, 4);
+});
+
+test("слово по переводу: слова с тем же смыслом не попадают в неверные", () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const r = buildWordChoices(entry("dog"), g, [], { rng: seeded(seed) });
+    assert.ok(!r.options.some((o) => !o.ok && o.text === "hound"), `seed ${seed}: «hound» (пёс) — это тот же смысл: ${JSON.stringify(r.options)}`);
+  }
+});
+
+test("слово по переводу: тот же тип записи и та же часть речи, если можно", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = buildWordChoices(entry("kick the bucket", "id"), g, [], { rng: seeded(seed) });
+    const wrong = r.options.filter((o) => !o.ok).map((o) => o.text);
+    assert.ok(wrong.every((w) => ["spill the beans", "break a leg", "piece of cake"].includes(w)), wrong.join());
+  }
+  let nouns = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = buildWordChoices(entry("dog"), g, [], { rng: seeded(seed) });
+    if (r.options.filter((o) => !o.ok).every((o) => g.byId.get(`w:${o.text}`)?.pos === "noun")) nouns++;
+  }
+  assert.equal(nouns, 20, "для существительного — существительные");
+});
+
+test("слово по переводу: близкое начало предпочтительнее", () => {
+  const near = new Glossary([
+    { t: "w", w: "grow", pos: "verb", ru: "расти", en: "to become bigger" },
+    { t: "w", w: "growl", pos: "verb", ru: "рычать", en: "to make a low sound" },
+    { t: "w", w: "graze", pos: "verb", ru: "пастись", en: "to eat grass" },
+    { t: "w", w: "sing", pos: "verb", ru: "петь", en: "to make music with the voice" },
+    { t: "w", w: "swim", pos: "verb", ru: "плавать", en: "to move in water" },
+    { t: "w", w: "dance", pos: "verb", ru: "танцевать", en: "to move to music" },
+    { t: "w", w: "cook", pos: "verb", ru: "готовить", en: "to prepare food" },
+  ]);
+  let growl = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const r = buildWordChoices(near.byId.get("w:grow"), near, [], { rng: seeded(seed) });
+    if (r.options.some((o) => o.text === "growl")) growl++;
+  }
+  assert.ok(growl >= 25, `growl должен часто попадаться рядом с grow: ${growl}/30`);
+});
+
+test("слово по переводу: используются и ваши карточки; слишком мало слов — null", () => {
+  const mine = [{ t: "w", w: "puddle", pos: "noun", ru: "лужа" }];
+  const tiny = new Glossary([{ t: "w", w: "dog", pos: "noun", ru: "собака" }]);
+  assert.equal(buildWordChoices({ t: "w", w: "dog", pos: "noun", ru: "собака" }, tiny, [], { rng: seeded(1) }), null);
+  const r = buildWordChoices({ t: "w", w: "dog", pos: "noun", ru: "собака" }, tiny, mine, { rng: seeded(1) });
+  assert.deepEqual(r.options.map((o) => o.text).sort(), ["dog", "puddle"]);
+  assert.equal(buildWordChoices({ t: "w", pos: "noun" }, tiny), null);
+});
+
+test("вопрос «какое это слово»: до трёх смыслов, длинное сокращается", () => {
+  assert.equal(promptText({ ru: "а; б; в; г" }), "а; б; в");
+  assert.equal(promptText({ rm: "внезапная вспышка гнева" }), "внезапная вспышка гнева");
+  assert.ok(promptText({ en: "word ".repeat(60) }).length <= 141);
+  assert.equal(promptText({ en: "a faint light" }), "a faint light");
 });

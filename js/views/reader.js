@@ -3,29 +3,11 @@ import { h, icon, openSheet, closeSheet } from "../dom.js";
 import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote } from "../store.js";
 import { noteAt, notesIn, findAnchor } from "../notes.js";
 import { openNoteSheet } from "./notes.js";
-import { chapterBlocks } from "../epub.js";
+import { chapterBlocks, prettyTitle } from "../epub.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
 import { openReaderSettings } from "./settings.js";
 import { speak } from "../tts.js";
-
-const SMALL = new Set(["a", "an", "the", "of", "in", "on", "at", "to", "and", "or", "but", "for", "with", "from", "by"]);
-
-/** «2. THE VANISHING GLASS» → «2. The Vanishing Glass» (только если заголовок набран капсом). */
-export function prettyTitle(s) {
-  if (!s || s !== s.toUpperCase() || !/[A-Z]{2}/.test(s)) return s;
-  let first = true;
-  return s
-    .toLowerCase()
-    .split(/(\s+)/)
-    .map((w) => {
-      if (!/[a-z]/.test(w)) return w;
-      const keep = !first && SMALL.has(w);
-      first = false;
-      return keep ? w : w.replace(/[a-z]/, (c) => c.toUpperCase());
-    })
-    .join("");
-}
 
 /** Оборачивает слова абзаца в <span class="w"> и возвращает данные для разбора. */
 function wrapParagraph(p) {

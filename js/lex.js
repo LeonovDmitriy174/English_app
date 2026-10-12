@@ -348,6 +348,22 @@ export function sentenceAt(text, pos) {
   return [0, text.length];
 }
 
+/** Предложения текста по порядку (тот же способ деления, что у sentenceAt). */
+export function* sentencesOf(text) {
+  const masked = text.replace(ABBR, (m) => m.slice(0, -1) + "\u0001");
+  const re = /[^.!?…]+(?:[.!?…]+["”’')\]]*|$)\s*/g;
+  let m;
+  while ((m = re.exec(masked))) {
+    if (m[0].length === 0) {
+      re.lastIndex++;
+      continue;
+    }
+    let end = m.index + m[0].length;
+    while (end > m.index && /\s/.test(text[end - 1])) end--;
+    if (end > m.index) yield text.slice(m.index, end);
+  }
+}
+
 // ── Расстояние Левенштейна (для режима «Написание») ───────────────────────
 export function distance(a, b) {
   const m = a.length;

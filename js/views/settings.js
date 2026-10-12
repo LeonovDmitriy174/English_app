@@ -1,4 +1,4 @@
-// settings.js — настройки: тема, размер текста, подсветка, озвучка, резервная копия.
+// settings.js — настройки приложения: тема, размер текста, подсветка, озвучка, резервная копия. Настройки словаря в dictsettings.js.
 import { h, openSheet, toast } from "../dom.js";
 import { app, setSetting, exportData, importData, APP_NAME } from "../store.js";
 import { isPersisted } from "../db.js";
@@ -9,7 +9,7 @@ const THEMES = [
   ["dark", "Тёмная"],
 ];
 
-function row(title, hint, control) {
+export function row(title, hint, control) {
   return h("div", { class: "set-row" }, h("div", null, h("div", null, title), hint && h("span", { class: "hint" }, hint)), control);
 }
 
@@ -40,7 +40,7 @@ function toggle(key, label) {
   return sw;
 }
 
-function stepper(key, { min, max, step, unit = "", label }) {
+export function stepper(key, { min, max, step, unit = "", label }) {
   const out = h("output", null, `${app.settings[key]}${unit}`);
   const set = async (d) => {
     const v = Math.min(max, Math.max(min, app.settings[key] + d));
@@ -104,7 +104,6 @@ export function openAppSettings() {
       null,
       h("h2", { class: "set-title" }, "Настройки"),
       ...common(),
-      row("Новых слов в день", "Сколько новых карточек добавлять в повторение", stepper("newPerDay", { min: 5, max: 60, step: 5, label: "Новых слов в день" })),
       h("div", { class: "set-actions" }, h("button", { class: "btn quiet block", onClick: save }, "Сохранить копию данных"), h("button", { class: "btn quiet block", onClick: () => fileInput.click() }, "Загрузить копию данных"), fileInput),
       h("p", { class: "note" }, `${APP_NAME} хранит книги и словарь только на этом устройстве. `, persisted),
       // Большой словарь собран из Викисловаря (tools/build_dict.py --wiktionary); маленький демо-словарь написан вручную

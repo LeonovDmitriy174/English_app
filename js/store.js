@@ -7,6 +7,8 @@ import { analyzeBook, dictSignature } from "./analysis.js";
 import * as levels from "./levels.js";
 import { newNote, noteAt, mergeNotes } from "./notes.js";
 import { sanitizeCatalog, cleanName, nameTaken, newGroupId, toggleMembership, isUserGroup, reconcileGroups, mergeGroups } from "./shelf.js";
+import { DEFAULT_MIX, normalizeMix, capOf, isWritten } from "./modes.js";
+import { contextPool, scanBook, mergeFound, ENOUGH } from "./context.js";
 
 export const APP_NAME = "Ember Chronicle";
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
@@ -15,7 +17,8 @@ export const app = {
   glossary: new Glossary([]),
   cards: new Map(),
   books: [],
-  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20 },
+  // newPerDay и mixModes это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
+  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20, mixModes: [...DEFAULT_MIX] },
   daily: { day: "", newDone: 0 },
   analysis: null, // { id, pct } пока идёт разбор книги
   notes: [], // заметки и закладки к книгам (js/notes.js)
@@ -77,6 +80,7 @@ export async function init() {
   }
   app.books = books.sort((a, b) => (b.opened || b.added) - (a.opened || a.added));
   Object.assign(app.settings, kvSettings?.value || {});
+  app.settings.mixModes = normalizeMix(app.settings.mixModes);
   if (kvDaily?.value?.day === today()) app.daily = kvDaily.value;
   else app.daily = { day: today(), newDone: 0 };
   applySettings();
@@ -162,15 +166,18 @@ export function queue(scope = "all", now = Date.now()) {
 }
 
 /**
- * Записать ответ на карточку. result: 'ok' | 'near' | 'no', written: режим с письмом.
+ * Записать ответ на карточку. result: 'ok' | 'near' | 'no'; task: задание (js/modes.js), по нему определяется, письменное оно
+ * и до какого уровня поднимает слово; ctxText: предложение, которое только что показывали (чтобы в следующий раз взять другое).
  * Возвращает { card, before, after }: уровень до и после ответа (для индикатора).
  */
-export async function answerCard(id, result, { written = false, now = Date.now() } = {}) {
+export async function answerCard(id, result, { task = "", written, now = Date.now(), ctxText = "" } = {}) {
   const c = app.cards.get(id);
   const before = c.srs.lv;
-  c.srs = levels.answer(c.srs, result, { written, now });
+  const wr = written ?? isWritten(task);
+  c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task) });
+  if (ctxText) c.lastCtx = ctxText;
   await db.put("cards", c);
-  await db.add("log", { id, t: now, result, written, lv: c.srs.lv });
+  await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv });
   if (before === 0) {
     if (app.daily.day !== today()) app.daily = { day: today(), newDone: 0 };
     app.daily.newDone += 1;
@@ -178,6 +185,45 @@ export async function answerCard(id, result, { written = false, now = Date.now()
   }
   emit();
   return { card: c, before, after: c.srs.lv };
+}
+
+// ── Предложения для задания «Слово в предложении» ────────────────────────
+let scanning = false;
+
+/**
+ * Ищет в загруженных книгах другие предложения со словами из словаря, чтобы пропуск не повторял одно и то же предложение.
+ * Идёт в фоне: по каждой книге один просмотр для всех слов, которым не хватает предложений. Найденное хранится у карточки
+ * (found), а просмотренные книги запоминаются (scanned), так что каждая книга просматривается для слова один раз.
+ */
+export async function ensureContexts() {
+  if (scanning) return;
+  scanning = true;
+  try {
+    const short = [...app.cards.values()].filter((c) => contextPool(c, app.glossary).length < ENOUGH);
+    for (const b of [...app.books]) {
+      const wanted = new Map();
+      for (const card of short) {
+        if (card.scanned?.includes(b.id) || app.cards.get(card.id) !== card) continue;
+        wanted.set(card.id, { card, known: new Set([...(card.ctx || []), ...(card.found || [])].map((x) => x.s)) });
+      }
+      if (!wanted.size) continue;
+      try {
+        const zip = await bookZip(b.id);
+        const picks = await scanBook({ book: b, zip, wanted, glossary: app.glossary });
+        for (const [id, { card }] of wanted) {
+          if (app.cards.get(id) !== card) continue; // слово удалили, пока шёл просмотр
+          const got = picks.get(id);
+          if (got?.length) card.found = mergeFound(card.found, got);
+          card.scanned = [...(card.scanned || []), b.id];
+          await db.put("cards", card);
+        }
+      } catch {
+        /* книга не открылась: попробуем в другой раз */
+      }
+    }
+  } finally {
+    scanning = false;
+  }
 }
 
 // ── Книги ─────────────────────────────────────────────────────────────────
@@ -582,6 +628,7 @@ export async function importData(text) {
   if (Array.isArray(data.log) && !(await db.all("log")).length) for (const row of data.log) await db.add("log", row);
   if (data.settings) {
     Object.assign(app.settings, data.settings);
+    app.settings.mixModes = normalizeMix(app.settings.mixModes);
     applySettings();
     await db.put("kv", { key: "settings", value: app.settings });
   }
