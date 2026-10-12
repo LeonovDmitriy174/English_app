@@ -1,4 +1,4 @@
-/* Ember Chronicle — стили.
+/* Gloss — стили.
    Идея оформления: читатель с карандашом. Страница — холодная бумага цвета тумана,
    чернила сине-чёрные, пометки в тексте — карандаши трёх цветов:
    синий — слово, зелёный — фразовый глагол, красный — идиома.
@@ -16,16 +16,16 @@
   --on-ink: #f4f5f0;
 
   --word: #2c4da0;
-  --pv: #1b7563;
+  --pv: #197060;
   --id: #b23a2e;
   --flag: var(--id);
   --focus: #2c4da0;
 
   --sel-w: rgba(44, 77, 160, 0.17);
-  --sel-pv: rgba(27, 117, 99, 0.19);
+  --sel-pv: rgba(25, 112, 96, 0.19);
   --sel-id: rgba(178, 58, 46, 0.16);
   --sel-x: rgba(27, 34, 49, 0.12);
-  --ok-bg: rgba(27, 117, 99, 0.12);
+  --ok-bg: rgba(25, 112, 96, 0.12);
   --no-bg: rgba(178, 58, 46, 0.1);
 
   --shadow: 0 -10px 40px rgba(18, 26, 44, 0.2);
@@ -257,11 +257,18 @@ p {
   opacity: 0.45;
 }
 .linkbtn {
+  position: relative;
   font: 500 14.5px var(--sans);
   color: var(--ink-2);
   text-decoration: underline;
   text-underline-offset: 3px;
   padding: 10px 0;
+}
+/* Область нажатия не меньше 44 px, а вид и отступы прежние (ссылки внутри строки текста не растягиваем) */
+.linkbtn:not(.inline)::after {
+  content: "";
+  position: absolute;
+  inset: -4px -8px;
 }
 
 [hidden] {
@@ -500,8 +507,9 @@ p {
 }
 .rtitle {
   flex: 1;
+  align-self: stretch; /* на всю высоту панели: 44 px */
   min-width: 0;
-  padding: 10px 8px;
+  padding: 0 8px;
   text-align: center;
   font: 500 14px var(--sans);
   color: var(--ink-2);
@@ -910,6 +918,7 @@ p {
   display: none;
 }
 .chip {
+  position: relative;
   flex: none;
   display: flex;
   align-items: center;
@@ -920,6 +929,12 @@ p {
   border: 1.5px solid var(--rule);
   font: 500 14px var(--sans);
   color: var(--ink-2);
+}
+/* Область нажатия 44 px при высоте 36: добавка сверху и снизу, соседние чипы по горизонтали не перекрываются */
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: -2px 0 -7px;
 }
 .chip[aria-pressed="true"] {
   background: var(--ink);
@@ -2075,4 +2090,242 @@ textarea.copybox {
 }
 .progress .facts {
   margin-top: 14px;
+}
+
+/* ── Главная ────────────────────────────────────────────────────────────── */
+a.btn {
+  text-decoration: none;
+}
+.home .top {
+  align-items: flex-start;
+  padding-top: 22px;
+}
+/* Название с карандашной чертой: слово, помеченное, как в тексте книги */
+.mark {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 6px;
+  font: 700 40px/1 var(--serif);
+  letter-spacing: -0.02em;
+}
+.mark-line {
+  position: absolute;
+  left: -3px;
+  right: -8px;
+  bottom: -3px;
+  height: 11px;
+  color: var(--word);
+  pointer-events: none;
+}
+.mark-line svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.home .sub {
+  margin-top: 14px;
+}
+.home .sub::first-letter {
+  text-transform: uppercase;
+}
+
+.h-block {
+  margin: 4px 0 8px;
+  padding: 0 0 22px;
+  border-bottom: 1px solid var(--rule);
+}
+.h-lead {
+  margin: 0 0 8px;
+  font: 600 22px/1.25 var(--serif);
+  letter-spacing: -0.01em;
+}
+.h-block .note {
+  margin: 0 0 14px;
+}
+.h-label {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.h-read {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 6px 0 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--paper-2);
+  color: inherit;
+  text-decoration: none;
+}
+.h-read .cover {
+  flex: none;
+  width: 60px;
+  height: 90px;
+}
+.h-read .cover.blank-cover {
+  font-size: 26px;
+}
+.h-read-text {
+  flex: 1;
+  min-width: 0;
+}
+.h-read-title {
+  margin-top: 3px;
+  font: 600 19px/1.25 var(--serif);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.h-read-ch {
+  margin-top: 3px;
+  font-size: 14px;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.h-read .resume-meta {
+  margin-top: 10px;
+}
+.h-read > .ico {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.h-review {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 0 24px;
+  border-bottom: 1px solid var(--rule);
+}
+.h-review .btn {
+  flex: none;
+  min-width: 132px;
+}
+.h-num {
+  font: 700 52px/1 var(--serif);
+  letter-spacing: -0.03em;
+}
+.h-num.big {
+  font-size: 60px;
+}
+.h-done {
+  color: var(--pv);
+  height: 26px;
+}
+.h-cap {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  font-size: 15.5px;
+  color: var(--ink-2);
+}
+.h-cap b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.h-cap small,
+.h-sub {
+  margin-top: 2px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+.h-done + .h-cap {
+  margin-top: 10px;
+  font: 600 22px/1.2 var(--serif);
+  color: var(--ink);
+}
+
+.h-streak {
+  padding: 24px 0 22px;
+  border-bottom: 1px solid var(--rule);
+}
+.h-streak-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.h-streak-top .h-cap {
+  margin-top: 0;
+  font-size: 16px;
+}
+.h-week {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin: 18px 0 0;
+  padding: 0;
+}
+.h-week li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.h-week i {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--rule);
+}
+.h-week li.on i {
+  background: var(--word);
+  transform: rotate(-1.4deg);
+}
+.h-week li.on:nth-child(even) i {
+  transform: rotate(1deg);
+}
+.h-week li.now span {
+  font-weight: 700;
+  color: var(--ink);
+}
+.h-week li.now:not(.on) i {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ink-3);
+}
+.h-streak .note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.h-ledger {
+  margin: 0;
+  padding: 0;
+}
+.h-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.h-row dt {
+  font-size: 15.5px;
+  color: var(--ink-2);
+}
+.h-row dt small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.h-row dd {
+  margin: 0;
+  font: 700 26px/1.1 var(--serif);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.h-more {
+  display: block;
+  margin: 12px auto 0;
 }

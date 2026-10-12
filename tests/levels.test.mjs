@@ -32,21 +32,39 @@ test("выше последнего уровня не растёт", () => {
   assert.equal(s.lv, MAX_LEVEL);
 });
 
-test("ошибка сбрасывает на первый уровень, а не на ступень назад", () => {
-  for (const lv of [2, 3, 5, 8]) {
-    const s = answer({ lv, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0 });
-    assert.equal(s.lv, 1, `с уровня ${lv}`);
-    assert.equal(s.due - T0, MIN);
-    assert.equal(s.lapses, 1);
-  }
+test("ошибка опускает слово на два уровня, но не ниже первого", () => {
+  const got = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((lv) => answer({ lv, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0 }).lv);
+  assert.deepEqual(got, [1, 1, 1, 2, 3, 4, 5, 6, 7, 8]);
+  const s = answer({ lv: 8, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0 });
+  assert.equal(cal(T0, s.due), 14, "с восьмого уровня на шестой: слово вернётся через 14 дней, а не через минуту");
+  assert.equal(s.lapses, 1, "ошибка считается срывом");
+  const low = answer({ lv: 2, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0 });
+  assert.equal(low.due - T0, MIN, "на первом уровне слово возвращается через минуту");
 });
 
-test("в письменных режимах ошибка сбрасывает на второй уровень, но не поднимает", () => {
-  const high = answer({ lv: 6, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0, written: true });
-  assert.equal(high.lv, 2);
-  assert.equal(high.due - T0, 10 * MIN);
-  const low = answer({ lv: 1, due: T0, last: T0, reps: 1, lapses: 0 }, "no", { now: T0, written: true });
-  assert.equal(low.lv, 1, "с первого уровня на второй не прыгаем");
+test("в письменных режимах ошибка тоже на два уровня вниз, но не ниже второго, и никогда не поднимает", () => {
+  const got = [1, 2, 3, 4, 5, 6, 8].map((lv) => answer({ lv, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0, written: true }).lv);
+  assert.deepEqual(got, [1, 2, 2, 2, 3, 4, 6]);
+  const s = answer({ lv: 3, due: T0, last: T0, reps: 5, lapses: 0 }, "no", { now: T0, written: true });
+  assert.equal(s.due - T0, 10 * MIN, "на втором уровне: через десять минут");
+  assert.equal(answer({ lv: 1, due: T0, last: T0, reps: 1, lapses: 0 }, "no", { now: T0, written: true }).lv, 1, "с первого уровня на второй не прыгаем");
+});
+
+test("повторная ошибка в том же заходе: уровень и срывы не меняются, срок считается заново", () => {
+  const first = answer({ lv: 8, due: T0, last: T0, reps: 9, lapses: 1 }, "no", { now: T0 });
+  assert.equal(first.lv, 6);
+  assert.equal(first.lapses, 2);
+  const again = answer(first, "no", { now: T0 + MIN, repeat: true });
+  assert.equal(again.lv, 6, "второй штраф не накладывается");
+  assert.equal(again.lapses, 2, "срыв не считается второй раз");
+  assert.equal(again.reps, first.reps + 1, "но повторение засчитано");
+  const fresh = answer(newSrs(T0), "no", { now: T0, repeat: true });
+  assert.equal(fresh.lv, 1, "у новой карточки повтор ничего не меняет");
+});
+
+test("выученное слово не пропадает из выученных из-за одной ошибки", () => {
+  const s = answer({ lv: 8, due: T0, last: T0, reps: 9, lapses: 0 }, "no", { now: T0 });
+  assert.ok(s.lv >= 4, "освоенное слово остаётся выше четвёртого уровня");
 });
 
 test("«почти» и «с подсказкой»: уровень не меняется", () => {
@@ -106,7 +124,7 @@ test("потолок: верный ответ не поднимает слово
   assert.equal(answer(newSrs(T0), "ok", { now: T0, cap: 3 }).lv, 1);
 });
 
-test("потолок не мешает ошибке: сброс работает как обычно", () => {
+test("потолок не мешает ошибке: штраф работает как обычно", () => {
   const s = answer({ lv: 5, due: T0, last: T0, reps: 9, lapses: 0 }, "no", { now: T0, cap: 3 });
-  assert.equal(s.lv, 1);
+  assert.equal(s.lv, 3);
 });

@@ -1,6 +1,6 @@
 // db.js — хранилище на устройстве (IndexedDB). Никаких серверов: всё остаётся в браузере телефона.
 
-const NAME = "ember";
+const NAME = "ember"; // прежнее имя базы: менять нельзя, иначе пропадут сохранённые книги и слова
 const VERSION = 1;
 let dbPromise;
 
@@ -37,6 +37,9 @@ export const db = {
   count: (store) => run(store, "readonly", (s) => s.count()),
   put: (store, value) => run(store, "readwrite", (s) => s.put(value)),
   add: (store, value) => run(store, "readwrite", (s) => s.add(value)),
+  /** Много записей одной транзакцией: на телефоне в десятки раз быстрее, чем по одной, и либо всё записалось, либо ничего. */
+  putMany: (store, values) => run(store, "readwrite", (s) => void values.forEach((v) => s.put(v))),
+  addMany: (store, values) => run(store, "readwrite", (s) => void values.forEach((v) => s.add(v))),
   del: (store, key) => run(store, "readwrite", (s) => s.delete(key)),
   clear: (store) => run(store, "readwrite", (s) => s.clear()),
 };

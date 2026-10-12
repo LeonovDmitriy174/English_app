@@ -1,5 +1,5 @@
 {
-  "name": "ember-chronicle",
+  "name": "gloss",
   "private": true,
   "type": "module",
   "description": "Личное приложение для чтения книг на английском. Зависимостей нет; package.json нужен только для запуска тестов в Node.",
@@ -10,6 +10,7 @@
     "test:dict": "python3 -m unittest tests/test_build_dict.py tests/test_translate_glosses.py tests/test_build_catalog.py",
     "dict:wiktionary": "python3 tools/build_dict.py --wiktionary",
     "dict:translate": "python3 tools/translate_glosses.py",
-    "catalog": "python3 tools/build_catalog.py"
+    "catalog": "python3 tools/build_catalog.py",
+    "test:e2e": "python3 tests/e2e/smoke.py"
   }
 }

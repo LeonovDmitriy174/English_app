@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ageDays, ageLabel, nudge, snoozeUntil, nudgeText, backupName, NUDGE_DAYS, SNOOZE_DAYS, WORTH } from "../js/backup.js";
+import { ageDays, ageLabel, nudge, snoozeUntil, nudgeText, backupName, newLogRows, NUDGE_DAYS, SNOOZE_DAYS, WORTH } from "../js/backup.js";
 
 const DAY = 86400000;
 // 12 октября 2026, полдень по местному времени
@@ -79,6 +79,26 @@ test("текст напоминания", () => {
 });
 
 test("имя файла копии по местной дате", () => {
-  assert.equal(backupName(new Date(2026, 0, 5, 23, 59).getTime()), "ember-backup-2026-01-05.json");
-  assert.equal(backupName(NOW), "ember-backup-2026-10-12.json");
+  assert.equal(backupName(new Date(2026, 0, 5, 23, 59).getTime()), "gloss-backup-2026-01-05.json");
+  assert.equal(backupName(NOW), "gloss-backup-2026-10-12.json");
+});
+
+test("журнал из копии дописывается к имеющемуся, а не теряется и не двоится", () => {
+  const local = [{ id: "w:owl", t: 1000, result: "ok" }, { id: "w:owl", t: 2000, result: "no" }];
+  const incoming = [
+    { id: "w:owl", t: 1000, result: "ok" }, // уже есть
+    { id: "w:owl", t: 3000, result: "ok" },
+    { id: "w:cat", t: 1000, result: "near" }, // то же время, другое слово
+    { id: "w:cat", t: 1000, result: "near" }, // дубль внутри самой копии
+  ];
+  const rows = newLogRows(local, incoming);
+  assert.deepEqual(rows.map((r) => `${r.id}@${r.t}`), ["w:owl@3000", "w:cat@1000"]);
+  assert.equal(newLogRows([...local, ...rows], incoming).length, 0, "повторная загрузка той же копии ничего не добавляет");
+});
+
+test("в пустой журнал попадают все строки копии, мусор отбрасывается", () => {
+  const incoming = [{ id: "w:a", t: 1 }, null, 5, { t: 2 }, { id: "w:b" }, { id: "w:c", t: "3" }, { id: "w:d", t: 4, result: "ok" }];
+  assert.deepEqual(newLogRows([], incoming).map((r) => r.id), ["w:a", "w:d"]);
+  assert.deepEqual(newLogRows(undefined, undefined), []);
+  assert.deepEqual(newLogRows([], "не список"), []);
 });

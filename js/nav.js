@@ -9,6 +9,10 @@
 
 export const TABS = ["library", "notes"];
 
+/** Откуда открыли книгу: чтобы стрелка «назад» в читалке вела туда же (на главную или в библиотеку). */
+export const origin = { hash: "" };
+export const backFromReader = () => (origin.hash.startsWith("#/home") ? "#/home" : lastPage.library);
+
 /** Какая страница показывалась на вкладке в последний раз. */
 export const lastPage = { library: "#/library", notes: "#/notes" };
 

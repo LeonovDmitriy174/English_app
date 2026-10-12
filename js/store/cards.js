@@ -100,19 +100,17 @@ export function queue(scope = "all", now = Date.now()) {
  * Записать ответ на карточку. result: 'ok' | 'near' | 'no'; task: задание (js/modes.js), по нему определяется, письменное оно
  * и до какого уровня поднимает слово; ctxText: предложение, которое только что показывали (чтобы в следующий раз взять другое);
  * ms: сколько длился ответ (в журнал, пользователю не показывается); lapse: false, если это повтор после ошибки в том же заходе
- * (вторая ошибка по тому же слову за заход «трудным» его не делает).
+ * (вторая ошибка по тому же слову за заход уровень не снижает и «трудным» слово не делает: штраф уже получен).
  * Повторение раньше срока (например, трудные слова вне очереди) уровень не поднимает и срок не двигает.
  * Возвращает { card, before, after }: уровень до и после ответа (для индикатора).
  */
 export async function answerCard(id, result, { task = "", written, now = Date.now(), ctxText = "", ms = null, lapse = true } = {}) {
   const c = app.cards.get(id);
   const before = c.srs.lv;
-  const lapsesBefore = c.srs.lapses || 0;
   const wr = written ?? isWritten(task);
   const early = before > 0 && c.srs.due > now;
   if (early && result !== "no") c.srs = { ...c.srs, last: now, reps: (c.srs.reps || 0) + 1 };
-  else c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task) });
-  if (!lapse) c.srs.lapses = lapsesBefore;
+  else c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task), repeat: !lapse });
   if (ctxText) c.lastCtx = ctxText;
   await db.put("cards", c);
   await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv, ...(Number.isFinite(ms) ? { ms: Math.round(ms) } : {}) });

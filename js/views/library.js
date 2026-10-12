@@ -6,26 +6,15 @@
 //   все книги      то, что уже лежит на устройстве.
 // Вложенность одна: внутри вложенной папки новую уже не создать (проверяет store).
 import { h, icon, toast, openSheet, closeSheet } from "../dom.js";
-import { app, subscribe, addBook, removeBook, ensureAnalysis, createGroup, renameGroup, moveGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset, folders, resumeBook } from "../store.js";
+import { app, subscribe, addBook, removeBook, ensureAnalysis, markFinished, createGroup, renameGroup, moveGroup, deleteGroup, toggleBookGroup, addFromCatalog, refreshCatalog, catalogAsset, folders, resumeBook } from "../store.js";
 import { ALL, MAX_GROUP_NAME, isUserGroup, shelfItems, fmtSize, folderCounts, folderRows, parentChoices, pathLabel } from "../shelf.js";
 import { pageHash, folderFromHash } from "../nav.js";
 import { folderList, backLink, plural, collapsed, hasGutter } from "./folders.js";
 import { openAppSettings } from "./settings.js";
 import { backupNudge } from "./backupui.js";
 import { openBookWords } from "./bookwords.js";
-
-const initialOf = (title) => (title || "?").trim()[0]?.toUpperCase();
-const blankCover = (title) => h("div", { class: "cover blank-cover", "aria-hidden": "true" }, initialOf(title));
-
-function cover(book) {
-  if (book.cover) {
-    const url = URL.createObjectURL(book.cover);
-    const img = h("img", { class: "cover", alt: "", src: url, loading: "lazy" });
-    img.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
-    return img;
-  }
-  return blankCover(book.title);
-}
+import { cover, blankCover } from "./cover.js";
+import { bookProgress, isFinished } from "../reading.js";
 
 /** Обложка книги из каталога: лежит рядом с приложением. Нет обложки или нет сети — буква, как у книг без обложки. */
 function catalogCover(entry) {
@@ -35,12 +24,7 @@ function catalogCover(entry) {
   return img;
 }
 
-function progressOf(book) {
-  const total = book.chapters.length;
-  const ch = Math.min(book.progress?.ch ?? 0, total - 1);
-  const frac = total ? (ch + (book.progress?.p ? 0.5 : 0)) / total : 0;
-  return { ch, total, pct: Math.round(frac * 100) };
-}
+const progressOf = bookProgress;
 
 /** Кнопка-«чип» с выбором: нажатая подсвечена. */
 const choiceChip = (label, on, onClick) => h("button", { class: "chip", "aria-pressed": String(on), onClick }, label);
@@ -258,7 +242,7 @@ export function renderLibrary(root, arg = "") {
       await navigator.clipboard.writeText(text);
       toast("Список скопирован");
     } catch {
-      const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "ember-unknown-words.txt" });
+      const a = h("a", { href: URL.createObjectURL(new Blob([text], { type: "text/plain" })), download: "gloss-unknown-words.txt" });
       document.body.append(a);
       a.click();
       a.remove();
@@ -308,10 +292,24 @@ export function renderLibrary(root, arg = "") {
           "div",
           { class: "set-actions" },
           st?.top ? h("button", { class: "btn block", onClick: () => openBookWords(book) }, icon("list", 20), "Слова этой книги") : null,
+          h(
+            "button",
+            {
+              class: "btn quiet block",
+              onClick: async () => {
+                const on = !isFinished(app.books.find((b) => b.id === book.id) || book);
+                await markFinished(book.id, on);
+                sheet.close();
+                toast(on ? "Книга отмечена прочитанной" : "Отметка «прочитана» снята");
+              },
+            },
+            icon("check", 20),
+            isFinished(book) ? "Снять отметку «прочитана»" : "Отметить прочитанной",
+          ),
           st?.unknown?.length ? h("button", { class: "btn quiet block", onClick: () => shareUnknown(book) }, "Скопировать список не найденных слов") : null,
           h("button", { class: "btn danger block", onClick: async () => { await removeBook(book.id); sheet.close(); toast("Книга удалена"); } }, icon("trash", 20), "Удалить книгу"),
         ),
-        h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга и ваше место в ней.", fromCatalog && " Встроенную книгу можно скачать снова из её папки."),
+        h("p", { class: "note" }, "Слова, которые вы добавили в словарь из этой книги, останутся. Удаляется только сама книга; если добавить её снова, чтение продолжится с того же места.", fromCatalog && " Встроенную книгу можно скачать снова из её папки."),
       ),
     });
   }
@@ -325,7 +323,7 @@ export function renderLibrary(root, arg = "") {
       "a",
       { class: "resume", href: `#/read/${b.id}`, "aria-label": `Продолжить чтение: ${b.title}, глава ${p.ch + 1} из ${p.total}` },
       cover(b),
-      h("div", { class: "resume-text" }, h("div", { class: "resume-label" }, "Продолжить чтение"), h("div", { class: "resume-title" }, b.title), h("div", { class: "resume-meta" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), `Глава ${p.ch + 1} из ${p.total}`)),
+      h("div", { class: "resume-text" }, h("div", { class: "resume-label" }, "Продолжить чтение"), h("div", { class: "resume-title" }, b.title), h("div", { class: "resume-meta" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), p.finished ? "Прочитана" : `Глава ${p.ch + 1} из ${p.total}`)),
       icon("next", 20),
     );
   }
@@ -347,7 +345,7 @@ export function renderLibrary(root, arg = "") {
         "button",
         { class: "book-open", onClick: () => (location.hash = `#/read/${b.id}`) },
         cover(b),
-        h("div", { style: { minWidth: 0, flex: 1 } }, h("div", { class: "btitle" }, b.title), b.author && h("div", { class: "bauthor" }, b.author), h("div", { class: "bprog" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), `Глава ${p.ch + 1} из ${p.total}`), h("div", { class: "bstat" }, statLine(b))),
+        h("div", { style: { minWidth: 0, flex: 1 } }, h("div", { class: "btitle" }, b.title), b.author && h("div", { class: "bauthor" }, b.author), h("div", { class: "bprog" }, h("div", { class: "bar" }, h("i", { style: { width: `${p.pct}%` } })), p.finished ? "Прочитана" : `Глава ${p.ch + 1} из ${p.total}`), h("div", { class: "bstat" }, statLine(b))),
       ),
       h("button", { class: "iconbtn", "aria-label": `Действия: ${b.title}`, onClick: () => bookMenu(b) }, icon("more", 22)),
     );

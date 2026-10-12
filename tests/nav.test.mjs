@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lastPage, pageHash, folderFromHash, remember, tabHref } from "../js/nav.js";
+import { lastPage, pageHash, folderFromHash, remember, tabHref, origin, backFromReader } from "../js/nav.js";
 
 test("адрес страницы: без папки, с папкой, с русским названием в идентификаторе", () => {
   assert.equal(pageHash("library"), "#/library");
@@ -51,4 +51,14 @@ test("место вкладки помнится между запусками; 
   } finally {
     delete globalThis.localStorage;
   }
+});
+
+test("стрелка «назад» в читалке ведёт туда, откуда открыли книгу", () => {
+  remember("library", "u-abc");
+  origin.hash = "#/home";
+  assert.equal(backFromReader(), "#/home", "открыли с главной: назад на главную");
+  origin.hash = "#/library/u-abc";
+  assert.equal(backFromReader(), "#/library/u-abc", "из папки: в ту же папку");
+  origin.hash = "";
+  assert.equal(backFromReader(), lastPage.library, "неизвестно, откуда: в библиотеку");
 });

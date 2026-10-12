@@ -1,9 +1,11 @@
 // reader.js — читалка: текст главы, нажатие на слово, подчёркивание сохранённого, прогресс.
-import { h, icon, openSheet, closeSheet } from "../dom.js";
-import { app, bookZip, saveProgress, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote, dictionaryReady } from "../store.js";
+import { h, icon, toast, openSheet, closeSheet } from "../dom.js";
+import { app, bookZip, saveProgress, markFinished, addReadingTime, flushActivity, resolveWord, cardFor, subscribe, kindClass, namesOf, ensureNote, moveNote, dictionaryReady } from "../store.js";
+import { createClock, TICK_SEC } from "../activity.js";
+import { atEnd, almostDone, isFinished } from "../reading.js";
 import { noteAt, notesIn, findAnchor } from "../notes.js";
 import { openNoteSheet } from "./notes.js";
-import { lastPage } from "../nav.js";
+import { lastPage, backFromReader } from "../nav.js";
 import { chapterBlocks, prettyTitle } from "../epub.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
@@ -74,7 +76,16 @@ export function renderReader(root, bookId) {
   let lastY = 0;
   let saveTimer = 0;
   let dirty = false; // после последнего сохранения читатель успел сдвинуть текст
+  let userScrolled = false; // в этой главе текст листали сами (а не открылась глава)
   let raf = 0;
+  // Время чтения: идёт, пока окно видно и вы что-то делаете (листаете, нажимаете); чтение хранится по дням (js/activity.js)
+  const clock = createClock();
+  clock.touch();
+  const clockTimer = setInterval(() => {
+    const sec = clock.tick(Date.now(), document.visibilityState === "visible");
+    if (sec) addReadingTime(sec);
+  }, TICK_SEC * 1000);
+  const touch = () => clock.touch();
 
   const text = h("article", { class: "text", lang: "en" });
   const chnav = h("div", { class: "chnav" });
@@ -83,7 +94,7 @@ export function renderReader(root, bookId) {
   const bar = h(
     "header",
     { class: "rbar" },
-    h("button", { class: "iconbtn", "aria-label": "К списку книг", onClick: () => (location.hash = lastPage.library) }, icon("back", 24)),
+    h("button", { class: "iconbtn", "aria-label": "Назад", onClick: () => (location.hash = backFromReader()) }, icon("back", 24)),
     titleBtn,
     h("button", { class: "iconbtn", "aria-label": "Оставить заметку или закладку", onClick: () => openNoteAt(currentPara()) }, icon("flag", 22)),
     h("button", { class: "iconbtn aa", "aria-label": "Настройки чтения", onClick: () => openReaderSettings() }, "Aa"),
@@ -258,6 +269,7 @@ export function renderReader(root, bookId) {
     chIdx = idx;
     paras = []; // пока открывается новая глава, места старой запоминать нельзя
     dirty = false;
+    userScrolled = false;
     clearTimeout(saveTimer);
     const ch = book.chapters[idx];
     titleBtn.textContent = prettyTitle(ch.title);
@@ -377,10 +389,22 @@ export function renderReader(root, bookId) {
     clearTimeout(saveTimer);
     if (!dirty || !paras.length) return;
     dirty = false;
-    saveProgress(book.id, chIdx, paraAt(view.scrollTop));
+    const max = view.scrollHeight - view.clientHeight;
+    const y = view.scrollTop;
+    saveProgress(book.id, chIdx, paraAt(y), max > 0 ? y / max : 1).then(checkFinished);
   }
 
-  function onScroll() {
+  /** Дочитали: пролистали последнюю главу до низа или остановились почти в самом конце. Книга отмечается сама, снять отметку можно в меню книги. */
+  function checkFinished() {
+    if (isFinished(book) || !paras.length) return;
+    const max = view.scrollHeight - view.clientHeight;
+    if (almostDone(book) || (userScrolled && atEnd(chIdx, book.chapters.length, view.scrollTop, max))) {
+      markFinished(book.id).then((changed) => changed && toast("Книга прочитана. Отметка стоит в библиотеке"));
+    }
+  }
+
+  function onScroll(e) {
+    if (e) userScrolled = true; // событие прокрутки от пользователя; вызов из load() сам без события
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
       const y = view.scrollTop;
@@ -396,9 +420,19 @@ export function renderReader(root, bookId) {
     saveTimer = setTimeout(flushProgress, 500);
   }
   view.addEventListener("scroll", onScroll, { passive: true });
-  const onHide = () => document.visibilityState === "hidden" && flushProgress();
+  view.addEventListener("scroll", touch, { passive: true });
+  view.addEventListener("pointerdown", touch, { passive: true });
+  const onHide = () => {
+    if (document.visibilityState !== "hidden") return;
+    flushProgress();
+    flushActivity();
+  };
   document.addEventListener("visibilitychange", onHide);
-  window.addEventListener("pagehide", flushProgress);
+  const onPageHide = () => {
+    flushProgress();
+    flushActivity();
+  };
+  window.addEventListener("pagehide", onPageHide);
 
   const off = subscribe(() => {
     mark();
@@ -409,8 +443,10 @@ export function renderReader(root, bookId) {
   return () => {
     off();
     flushProgress();
+    flushActivity();
+    clearInterval(clockTimer);
     document.removeEventListener("visibilitychange", onHide);
-    window.removeEventListener("pagehide", flushProgress);
+    window.removeEventListener("pagehide", onPageHide);
     cancelAnimationFrame(raf);
     slip?.close();
     closeSheet();

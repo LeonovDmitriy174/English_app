@@ -2,7 +2,7 @@
 import { openZip } from "./zip.js";
 
 /** Версия разбора EPUB. Книги, добавленные более ранней версией, при запуске разбираются заново (store.js). */
-export const EPUB_PARSER = 2;
+export const EPUB_PARSER = 3;
 
 const xml = (s) => new DOMParser().parseFromString(s, "application/xml");
 
@@ -37,6 +37,38 @@ function hash(str) {
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h.toString(16).padStart(8, "0");
+}
+
+// Служебные страницы (аннотация, оглавление, обложка, посвящение): по названию и по краям книги
+const FRONT = /^(annotation|contents|table of contents|copyright|cover|title page|about the author|dedication|acknowledg(e)?ments|also by .*|other books by .*)$/i;
+// Короткие страницы по краям книги, которые всё же текст истории: пролог, эпилог, интерлюдия, глава
+const STORY = /^(prologue|epilogue|interlude|afterword|chapter\b|part\b|book\b|[ivxlc]+\.?$|\d+\.?$)/i;
+const REAL_CHARS = 1500; // «настоящая» глава: от этого размера
+const PAGE_CHARS = 150; // короче страница считается пустой или разделителем («Часть первая») и в книгу не входит
+
+/**
+ * Какие файлы книги считать главами. chapters: [{ title, chars, ... }] в порядке чтения.
+ * Настоящие главы (от 1500 знаков) идут всегда. Всё, что лежит МЕЖДУ первой и последней из них, остаётся, даже если короткое:
+ * это короткие главы (басни, стихи, интерлюдии), а не служебные страницы; убираются только пустые страницы и страницы со служебным
+ * названием (оглавление, авторские права). По краям книги короткие страницы остаются, только если они похожи на текст
+ * истории (пролог, эпилог, «Глава 3»). Если настоящих глав нет совсем (сборник коротких рассказов), остаётся всё, что не служебное.
+ */
+export function selectChapters(chapters) {
+  const title = (c) => (c.title || "").trim();
+  const service = (c) => FRONT.test(title(c));
+  const big = (c) => c.chars >= REAL_CHARS && !service(c);
+  const first = chapters.findIndex(big);
+  if (first < 0) {
+    const rest = chapters.filter((c) => !service(c) && c.chars >= PAGE_CHARS);
+    return rest.length ? rest : chapters;
+  }
+  let last = chapters.length - 1;
+  while (last > first && !big(chapters[last])) last--;
+  return chapters.filter((c, i) => {
+    if (service(c) || c.chars < PAGE_CHARS) return false;
+    if (i >= first && i <= last) return true;
+    return big(c) || STORY.test(title(c));
+  });
 }
 
 /** Читает EPUB. Возвращает { meta, chapters, cover } — всё, что нужно для библиотеки. */
@@ -91,10 +123,7 @@ export async function readEpub(buffer) {
     const heading = doc.querySelector("h1, h2, h3, [class*='title']")?.textContent.replace(/\s+/g, " ").trim();
     chapters.push({ href: item.href, chars, title: titles.get(item.href) || heading || "" });
   }
-  // Служебные страницы (аннотация, оглавление, обложка) убираем, если есть настоящие главы
-  const FRONT = /^(annotation|contents|table of contents|copyright|cover|title page|about the author)$/i;
-  let real = chapters.filter((c) => c.chars >= 1500 && !FRONT.test(c.title.trim()));
-  if (!real.length) real = chapters;
+  const real = selectChapters(chapters);
   real.forEach((c, i) => {
     if (!c.title) c.title = `Часть ${i + 1}`;
   });

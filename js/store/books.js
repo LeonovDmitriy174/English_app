@@ -3,6 +3,8 @@ import { db, requestPersistence } from "../db.js";
 import { readEpub, EPUB_PARSER } from "../epub.js";
 import { openZip } from "../zip.js";
 import { analyzeBook, statsSignature } from "../analysis.js";
+import { isFinished, placeToKeep } from "../reading.js";
+import { isUserGroup } from "../shelf.js";
 import { app, emit } from "./state.js";
 import { dictionaryReady } from "./lexicon.js";
 import { persistNotes } from "./notes.js";
@@ -71,19 +73,51 @@ export const resumeBook = () => app.books.reduce((best, b) => (b.opened && (!bes
  * Запоминает место в книге. Если место то же, а эта книга и так последняя из открытых, запись не повторяется:
  * она переписывает всю запись книги вместе с обложкой и оглавлением.
  */
-export async function saveProgress(id, ch, p) {
+export async function saveProgress(id, ch, p, f) {
   const b = app.books.find((x) => x.id === id);
   if (!b) return;
   const now = Date.now();
-  if (b.progress?.ch === ch && b.progress?.p === p && resumeBook() === b && now - b.opened < 10 * 60000) return;
-  b.progress = { ch, p };
+  const prev = b.progress || {};
+  // доля прокрутки внутри главы: если её не передали, а глава та же, остаётся прежняя; в новой главе начинаем с нуля
+  // Доля вычисляется по прокрутке, а при открытии книги текст ставится по абзацу: набегает разница в доли процента. Её не записываем,
+  // иначе «открыл и закрыл» каждый раз сдвигало бы место и переписывало запись книги.
+  const same = prev.ch === ch && prev.p === p;
+  const frac = Number.isFinite(f) ? (same && Number.isFinite(prev.f) && Math.abs(f - prev.f) < 0.01 ? prev.f : Math.min(1, Math.max(0, Math.round(f * 1000) / 1000))) : prev.ch === ch ? prev.f : 0;
+  if (prev.ch === ch && prev.p === p && prev.f === frac && resumeBook() === b && now - b.opened < 10 * 60000) return;
+  b.progress = { ch, p, ...(frac === undefined ? {} : { f: frac }), ...(prev.done ? { done: prev.done } : {}) };
   b.opened = now;
   await db.put("books", b);
 }
 
+/** Отметка «прочитана»: сама при дочтении до конца, а в меню книги её можно поставить и снять. Возвращает true, если что-то изменилось. */
+export async function markFinished(id, on = true) {
+  const b = app.books.find((x) => x.id === id);
+  if (!b || isFinished(b) === !!on) return false;
+  const { done, ...rest } = b.progress || { ch: 0, p: 0 };
+  b.progress = on ? { ...rest, done: Date.now() } : rest;
+  await db.put("books", b);
+  emit();
+  return true;
+}
+
 export const persistBook = (b) => db.put("books", b);
 
+/**
+ * Удаляет книгу. Место в ней, отметка «прочитана» и ваши папки запоминаются (так же, как для книги из резервной копии, которой ещё
+ * нет на устройстве): если добавить тот же файл снова, чтение продолжится с того же места.
+ */
 export async function removeBook(id) {
+  const gone = app.books.find((b) => b.id === id);
+  const place = placeToKeep(gone);
+  const own = (gone?.groups || []).filter(isUserGroup);
+  if (place || own.length) {
+    const waiting = (await db.get("kv", "progress"))?.value || {};
+    const waitingMeta = (await db.get("kv", "bookmeta"))?.value || {};
+    if (place) waiting[id] = place;
+    if (own.length) waitingMeta[id] = { groups: own };
+    await db.put("kv", { key: "progress", value: waiting });
+    await db.put("kv", { key: "bookmeta", value: waitingMeta });
+  }
   app.books = app.books.filter((b) => b.id !== id);
   zips.delete(id);
   await db.del("books", id);
@@ -120,7 +154,8 @@ export async function reparseBooks() {
         if (!sameShape) {
           const move = (i) => next.findIndex((c) => c.href === old[i]?.href);
           const k = move(b.progress?.ch ?? 0);
-          b.progress = k >= 0 ? { ch: k, p: b.progress?.p || 0 } : { ch: 0, p: 0 };
+          const { f, done } = b.progress || {};
+          b.progress = k >= 0 ? { ch: k, p: b.progress?.p || 0, ...(f === undefined ? {} : { f }), ...(done ? { done } : {}) } : { ch: 0, p: 0, ...(done ? { done } : {}) };
           let moved = false;
           for (const n of app.notes) {
             if (n.book !== b.id) continue;
@@ -136,6 +171,7 @@ export async function reparseBooks() {
         if (!sameText) {
           b.stats = undefined; // разбор по прежнему тексту устарел
           namesCache.delete(b.id);
+          await forgetScans(b.id); // и предложения для заданий, найденные в прежнем тексте, ищутся заново
         }
       }
       b.parser = EPUB_PARSER;
@@ -146,6 +182,15 @@ export async function reparseBooks() {
     }
   }
   if (changed) emit();
+}
+
+/** У карточек стирается отметка «книга просмотрена», чтобы предложения из этой книги нашлись заново (js/store/contexts.js). */
+async function forgetScans(bookId) {
+  for (const c of app.cards.values()) {
+    if (!c.scanned?.includes(bookId)) continue;
+    c.scanned = c.scanned.filter((id) => id !== bookId);
+    await db.put("cards", c);
+  }
 }
 
 // ── Автоматический разбор книг ────────────────────────────────────────────

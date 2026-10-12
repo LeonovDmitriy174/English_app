@@ -78,16 +78,23 @@ export function openAppSettings() {
   isPersisted().then((p) => (persisted.textContent = p ? "Браузер не будет удалять данные сам" : "Браузер может удалить данные при нехватке места: делайте копии"));
 
   const fileInput = h("input", { type: "file", accept: "application/json,.json", class: "visually-hidden", "aria-label": "Файл резервной копии" });
+  const loadBtn = h("button", { class: "btn quiet block", onClick: () => fileInput.click() }, "Загрузить копию данных");
   fileInput.addEventListener("change", async () => {
     const f = fileInput.files[0];
     fileInput.value = "";
     if (!f) return;
+    const label = loadBtn.textContent;
+    loadBtn.disabled = true;
+    loadBtn.textContent = "Загружаю…";
     try {
-      const { cards, notes } = await importData(await f.text());
-      const parts = [cards && `карточек: ${cards}`, notes && `заметок: ${notes}`].filter(Boolean);
+      const { cards, notes, log } = await importData(await f.text());
+      const parts = [cards && `карточек: ${cards}`, notes && `заметок: ${notes}`, log && `ответов: ${log}`].filter(Boolean);
       toast(parts.length ? `Загружено ${parts.join(", ")}` : "Новых данных в копии нет");
     } catch (err) {
       toast(err.message || "Не удалось прочитать файл");
+    } finally {
+      loadBtn.disabled = false;
+      loadBtn.textContent = label;
     }
   });
 
@@ -117,7 +124,7 @@ export function openAppSettings() {
       null,
       h("h2", { class: "set-title" }, "Настройки"),
       ...common(),
-      h("div", { class: "set-actions" }, h("button", { class: "btn quiet block", onClick: save }, "Сохранить копию данных"), h("button", { class: "btn quiet block", onClick: () => fileInput.click() }, "Загрузить копию данных"), fileInput),
+      h("div", { class: "set-actions" }, h("button", { class: "btn quiet block", onClick: save }, "Сохранить копию данных"), loadBtn, fileInput),
       when,
       h("p", { class: "note" }, `${APP_NAME} хранит книги и словарь только на этом устройстве. `, persisted),
       // Большой словарь собран из Викисловаря (tools/build_dict.py --wiktionary); маленький демо-словарь написан вручную

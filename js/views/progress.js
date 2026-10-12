@@ -3,7 +3,7 @@
 import { h, openSheet } from "../dom.js";
 import { app } from "../store.js";
 import { db } from "../db.js";
-import { GROUPS, levelSpread, reviewsByDay, streak, accuracy, shortDate } from "../progress.js";
+import { GROUPS, levelSpread, reviewsByDay, studyDays, streakOf, accuracy, shortDate } from "../progress.js";
 
 const DAYS = 14;
 
@@ -33,7 +33,7 @@ export async function openProgress() {
   const now = Date.now();
   const rows = reviewsByDay(log, now, DAYS);
   const today = rows[rows.length - 1];
-  const run = streak(log, now);
+  const run = streakOf(studyDays(log, app.activity), now);
   const acc = accuracy(rows);
   const max = Math.max(1, ...rows.map((r) => r.n));
 
@@ -60,7 +60,7 @@ export async function openProgress() {
       h("dt", null, "Сегодня"),
       h("dd", null, `${today.n} ${plural(today.n, ["повторение", "повторения", "повторений"])}`),
       h("dt", null, "Подряд"),
-      h("dd", null, run ? `${run} ${plural(run, ["день", "дня", "дней"])}` : "серия начнётся с первого повторения"),
+      h("dd", null, run ? `${run} ${plural(run, ["день", "дня", "дней"])}` : "серия начнётся с первого занятия"),
       acc === null ? null : h("dt", null, `Верно за ${DAYS} дней`),
       acc === null ? null : h("dd", null, `${Math.round(acc * 100)}%`),
     ),

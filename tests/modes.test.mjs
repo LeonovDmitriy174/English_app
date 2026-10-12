@@ -116,7 +116,7 @@ test("потолки: выбор до 3 уровня, выбор в предло
   assert.equal(capOf("неизвестное"), Infinity);
 });
 
-test("письменные задания помечены: ошибка в них сбрасывает на второй уровень", () => {
+test("письменные задания помечены: ошибка в них опускает не ниже второго уровня", () => {
   for (const t of ["spell", "cloze", "listenType", "dictation"]) assert.ok(isWritten(t), t);
   for (const t of ["choice", "choiceBack", "clozeChoice", "listenChoice", "phraseChoice", "formChoice"]) assert.ok(!isWritten(t), t);
 });

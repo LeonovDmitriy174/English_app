@@ -1,7 +1,7 @@
 // progress.js — «Прогресс»: сколько слов на каком уровне, сколько повторений за последние дни, серия дней подряд.
 // Время следующего повторения здесь не считается и не показывается. Чистые функции без DOM: проверяются в Node (tests/progress.test.mjs).
 import { studyDay, PIPS } from "./levels.js";
-
+import { readDays } from "./activity.js";
 
 /** Группы уровней: новое слово; слово, которое учится; знакомое; освоенное (выше последней точки индикатора). */
 export const GROUPS = [
@@ -56,21 +56,44 @@ export function reviewsByDay(log, now = Date.now(), n = 14) {
   return rows;
 }
 
-/**
- * Сколько учебных дней подряд были повторения. Сегодняшний день ещё не кончился, поэтому, если сегодня повторений пока нет,
- * серия считается до вчера и не обнуляется.
- */
-export function streak(log, now = Date.now()) {
+const dayBefore = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, d.getHours(), d.getMinutes());
+
+/** Учебные дни, в которые было хоть одно повторение (log) или достаточно чтения (activity, js/activity.js). */
+export function studyDays(log, activity) {
   const days = new Set((log || []).map((e) => studyDay(e.t)));
+  for (const d of readDays(activity)) days.add(d);
+  return days;
+}
+
+/**
+ * Сколько учебных дней подряд были занятия (days — множество дней «ГГГГ-ММ-ДД»). Сегодняшний день ещё не кончился, поэтому, если сегодня
+ * занятий пока нет, серия считается до вчера и не обнуляется.
+ */
+export function streakOf(days, now = Date.now()) {
   let n = 0;
   let d = new Date(now);
-  if (!days.has(studyDay(d.getTime()))) d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, d.getHours(), d.getMinutes());
+  if (!days.has(studyDay(d.getTime()))) d = dayBefore(d);
   while (days.has(studyDay(d.getTime()))) {
     n += 1;
-    d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, d.getHours(), d.getMinutes());
+    d = dayBefore(d);
   }
   return n;
 }
+
+/** Самая длинная серия за всё время. */
+export function bestStreak(days) {
+  const t = [...days].map((s) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10))).sort((a, b) => a - b);
+  let best = 0;
+  let run = 0;
+  t.forEach((x, i) => {
+    run = i && x - t[i - 1] === 86400000 ? run + 1 : 1;
+    best = Math.max(best, run);
+  });
+  return best;
+}
+
+/** Серия по одним повторениям (журнал ответов). */
+export const streak = (log, now = Date.now()) => streakOf(studyDays(log, null), now);
 
 /** Доля верных ответов из rows (результат reviewsByDay) или null, если ответов не было. */
 export function accuracy(rows) {

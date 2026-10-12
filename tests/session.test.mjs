@@ -9,11 +9,11 @@ function play(startLv, answers, { written = false } = {}) {
   let srs = { ...levels.newSrs(), lv: startLv };
   let requeues = 0;
   for (const a of answers) {
-    const { effective, requeue } = judgeInSession(t, "w", a);
-    srs = levels.answer(srs, effective, { written });
+    const { effective, requeue, again } = judgeInSession(t, "w", a);
+    srs = levels.answer(srs, effective, { written, repeat: again });
     if (requeue) requeues += 1;
   }
-  return { lv: srs.lv, requeues };
+  return { lv: srs.lv, requeues, lapses: srs.lapses };
 }
 
 test("несколько верных ответов за заход поднимают слово только на один уровень", () => {
@@ -27,11 +27,20 @@ test("в Миксе слово, которое спросили тремя сп�
   assert.equal(play(2, ["ok", "ok", "ok"], {}).lv, 3);
 });
 
-test("ошибка сбрасывает уровень и возвращает слово; верный ответ после ошибки не поднимает", () => {
+test("ошибка опускает уровень на два и возвращает слово; верный ответ после ошибки не поднимает", () => {
   const r = play(5, ["no", "ok"]);
-  assert.equal(r.lv, 1, "сброс на первый, повторный верный ответ уровень не меняет");
+  assert.equal(r.lv, 3, "с пятого на третий, повторный верный ответ уровень не меняет");
   assert.equal(r.requeues, 1);
-  assert.equal(play(5, ["no", "ok"], { written: true }).lv, 2, "в письменных режимах сброс на второй");
+  assert.equal(play(3, ["no", "ok"]).lv, 1, "с третьего на первый");
+  assert.equal(play(3, ["no", "ok"], { written: true }).lv, 2, "в письменных режимах не ниже второго");
+});
+
+test("повторные ошибки по слову за заход штраф не удваивают", () => {
+  const r = play(8, ["no", "no", "no"]);
+  assert.equal(r.lv, 6, "с восьмого на шестой один раз, а не до второго");
+  assert.equal(r.lapses, 1, "и срыв засчитан один раз");
+  assert.equal(play(8, ["no", "ok", "no"]).lv, 6, "ошибка после верного ответа после ошибки тоже не снижает дальше");
+  assert.equal(play(1, ["no", "no"]).lv, 1);
 });
 
 test("слово, которое верно ответили с первого раза, обратно не возвращается", () => {

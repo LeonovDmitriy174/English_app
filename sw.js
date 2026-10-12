@@ -22,6 +22,7 @@ const FILES = [
   "css/app.css",
   "icons/icon-192.png",
   "icons/icon-512.png",
+  "icons/icon-maskable-512.png",
   "icons/apple-touch-icon.png",
   "js/app.js",
   "js/dom.js",
@@ -40,10 +41,14 @@ const FILES = [
   "js/store/catalog.js",
   "js/store/notes.js",
   "js/store/data.js",
+  "js/store/activity.js",
   "js/lex.js",
   "js/rustem.js",
   "js/bookwords.js",
   "js/progress.js",
+  "js/activity.js",
+  "js/reading.js",
+  "js/home.js",
   "js/dictsearch.js",
   "js/levels.js",
   "js/session.js",
@@ -82,6 +87,8 @@ const FILES = [
   "js/views/hits.js",
   "js/views/bookwords.js",
   "js/views/progress.js",
+  "js/views/home.js",
+  "js/views/cover.js",
 ];
 
 // Установка: кладём все файлы приложения в новый кэш, а словарь в свой, если такого ещё нет. cache: "reload" — мимо HTTP-кэша

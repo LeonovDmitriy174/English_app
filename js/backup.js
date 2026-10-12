@@ -61,9 +61,28 @@ export function nudgeText({ never, days }, cards = 0) {
   return `Копия данных не делалась ${days} ${plural(days, ["день", "дня", "дней"])}. Сохраните свежую: без неё данные живут только на этом телефоне.`;
 }
 
-/** Имя файла копии: ember-backup-2026-10-12.json (по местной дате). */
+/**
+ * Строки журнала ответов из копии, которых на устройстве ещё нет. Одинаковыми считаются ответы на то же слово в тот же момент,
+ * поэтому копию можно загружать поверх уже идущих занятий и повторно: история дополняется и не двоится.
+ * Строки без слова или времени отбрасываются.
+ */
+export function newLogRows(local, incoming) {
+  const key = (r) => `${r.id}|${r.t}`;
+  const have = new Set((Array.isArray(local) ? local : []).map(key));
+  const out = [];
+  for (const r of Array.isArray(incoming) ? incoming : []) {
+    if (!r || typeof r !== "object" || typeof r.id !== "string" || !Number.isFinite(r.t)) continue;
+    const k = key(r);
+    if (have.has(k)) continue;
+    have.add(k);
+    out.push(r);
+  }
+  return out;
+}
+
+/** Имя файла копии: gloss-backup-2026-10-12.json (по местной дате). */
 export function backupName(now = Date.now()) {
   const d = new Date(now);
   const p = (n) => String(n).padStart(2, "0");
-  return `ember-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
+  return `gloss-backup-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.json`;
 }

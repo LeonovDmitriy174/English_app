@@ -3,10 +3,11 @@ import { Glossary } from "../lex.js";
 import { DEFAULT_MIX } from "../modes.js";
 import { studyDay } from "../levels.js";
 
-export const APP_NAME = "Ember Chronicle";
+export const APP_NAME = "Gloss"; // видимое имя; внутренние имена (база данных, кэши, метка копии) прежние: от них зависят уже сохранённые данные
 export const app = {
   glossary: new Glossary([]),
   cards: new Map(),
+  activity: { read: {} }, // время чтения по учебным дням, секунды (js/activity.js)
   known: new Set(), // id слов, которые вы пометили «Знаю» в списке «Слова этой книги»: их там больше не предлагают
   books: [],
   // newPerDay, mixModes и speedRule это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
