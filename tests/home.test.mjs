@@ -40,7 +40,7 @@ test("лучшая серия за всё время", () => {
 });
 
 test("сводка для главной", () => {
-  const cards = [card(0), card(0), card(2), card(4), card(6), card(7), card(10), card(9, { skip: true })];
+  const cards = [card(0), card(0), card(3), card(6), card(8), card(10), card(10), card(9, { skip: true })];
   const books = [
     { chapters: [{ chars: 1000 }], progress: { ch: 0, p: 0, f: 1, done: 5 }, stats: { tokens: 200 }, opened: 1 },
     { chapters: [{ chars: 1000 }, { chars: 1000 }], progress: { ch: 1, p: 1, f: 0.5 }, stats: { tokens: 400 }, opened: 2 },
@@ -48,7 +48,7 @@ test("сводка для главной", () => {
   const log = [{ t: at(12), result: "ok" }, { t: at(12, 16), result: "no" }, { t: at(11), result: "ok" }, { t: at(6), result: "ok" }];
   const activity = { read: { [day(12)]: 600, [day(10)]: 1800, [day(5)]: 3600 } };
   const s = homeSummary({ cards, books, log, activity, now: NOW });
-  assert.deepEqual(s.words, { total: 7, learned: 4, learning: 1, fresh: 2, mastered: 2 }, "уровни 4–10 выучены, скрытое слово не считается");
+  assert.deepEqual(s.words, { total: 7, learned: 4, learning: 1, fresh: 2, mastered: 2 }, "уровни 6–10 выучены, скрытое слово не считается");
   assert.deepEqual(s.books, { total: 2, finished: 1, reading: 1 });
   assert.equal(s.wordsRead, 200 + 300);
   assert.equal(s.streak, 3, "12, 11 (повторение), 10 (чтение)");
@@ -69,9 +69,9 @@ test("сводка для главной", () => {
 });
 
 test("кривая для главной появляется вместе с первым выученным словом; Map.values() можно передавать", () => {
-  assert.equal(homeSummary({ cards: [card(2), card(3)], now: NOW }).learnedTrend, null);
-  const cards = new Map([["w:a", { id: "w:a", ...card(5) }], ["w:b", { id: "w:b", ...card(1) }]]);
-  const s = homeSummary({ cards: cards.values(), log: [{ id: "w:a", t: at(8), lv: 4, result: "ok" }], now: NOW });
+  assert.equal(homeSummary({ cards: [card(2), card(5)], now: NOW }).learnedTrend, null);
+  const cards = new Map([["w:a", { id: "w:a", ...card(8) }], ["w:b", { id: "w:b", ...card(1) }]]);
+  const s = homeSummary({ cards: cards.values(), log: [{ id: "w:a", t: at(8), lv: 6, v: 2, result: "ok" }], now: NOW });
   assert.equal(s.words.total, 2);
   assert.equal(s.words.learned, 1);
   assert.deepEqual(s.learnedTrend.slice(-7), [0, 0, 1, 1, 1, 1, 1], "выучено 8 октября");

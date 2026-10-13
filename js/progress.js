@@ -1,9 +1,9 @@
 // progress.js — «Прогресс»: сколько слов на каком уровне, сколько повторений за последние дни, серия дней подряд.
 // Время следующего повторения здесь не считается и не показывается. Чистые функции без DOM: проверяются в Node (tests/progress.test.mjs).
-import { studyDay, PIPS } from "./levels.js";
+import { studyDay, KNOWN, MAX_LEVEL } from "./levels.js";
 import { readDays } from "./activity.js";
 
-/** Группы уровней: новое слово; слово, которое учится; знакомое; освоенное (выше последней точки индикатора). */
+/** Группы уровней: новое слово; слово, которое учится (1–5); знакомое (6–9, от трёх дней между повторами); освоенное (последний уровень, 28 дней). */
 export const GROUPS = [
   { key: "new", label: "Новые" },
   { key: "learning", label: "Учу" },
@@ -13,8 +13,8 @@ export const GROUPS = [
 
 export function groupOf(lv) {
   if (!lv) return "new";
-  if (lv <= 3) return "learning";
-  return lv <= PIPS ? "known" : "mastered";
+  if (lv < KNOWN) return "learning";
+  return lv < MAX_LEVEL ? "known" : "mastered";
 }
 
 /** Сколько карточек в каждой группе. Слова, помеченные «Это имя, не повторять», в учёбе не участвуют и не считаются. */

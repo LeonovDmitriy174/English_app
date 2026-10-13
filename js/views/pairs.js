@@ -3,7 +3,7 @@
 import { h, icon } from "../dom.js";
 import { app } from "../store.js";
 import { speak } from "../tts.js";
-import { pickPairs, rightOrder } from "../pairs.js";
+import { pickPairs, rightOrder, sizeStep } from "../pairs.js";
 
 const plural = (n, f) => {
   const a = n % 10;
@@ -34,12 +34,18 @@ export function runPairs({ view, cards, onExit }) {
     const foot = h("div", { class: "rv-foot" });
     const note = h("p", { class: "rv-hint", "aria-live": "polite" }, "Соедините слово и его перевод");
 
+    const stepL = sizeStep(left.map((p) => p.w), "l");
+    const stepR = sizeStep(right.map((p) => p.ru), "r");
     const make = (side, p) => {
-      const b = h("button", { class: `pair ${side === "l" ? "en" : "ru"}`, "aria-pressed": "false", onClick: () => tap(side, p) }, h("span", { class: "t" }, side === "l" ? p.w : p.ru));
+      const text = side === "l" ? p.w : p.ru;
+      const step = side === "l" ? stepL : stepR;
+      const b = h("button", { class: `pair ${side === "l" ? "pair-w" : "pair-m"}${step ? ` s${step}` : ""}`, "aria-pressed": "false", onClick: () => tap(side, p) }, h("span", { class: "t" }, text));
       buttons.set(`${side}:${p.id}`, b);
       return b;
     };
-    const cols = h("div", { class: "pairs" }, h("div", { class: "pcol" }, left.map((p) => make("l", p))), h("div", { class: "pcol" }, right.map((p) => make("r", p))));
+    // Классы плиток pair-w (слово) и pair-m (перевод) не «en»/«ru»: общий класс .ru задаёт отступы и шрифт для переводов в других местах и сдвигал правый столбец.
+    // Одна общая сетка (а не два столбца): строки у слова и перевода те же, высота у всех плиток одинаковая. Сначала столбец слов, потом столбец переводов.
+    const cols = h("div", { class: "pairs", style: { gridTemplateRows: `repeat(${left.length}, 1fr)` } }, left.map((p) => make("l", p)), right.map((p) => make("r", p)));
 
     function select(side, id) {
       for (const b of buttons.values()) b.setAttribute("aria-pressed", "false");
@@ -64,7 +70,7 @@ export function runPairs({ view, cards, onExit }) {
         for (const el of [a, b]) {
           el.classList.add("matched");
           el.disabled = true;
-          el.append(icon("check", 18));
+          el.append(icon("check", 13)); // значок на углу плитки: текст не переносится заново
         }
         matched += 1;
         if (matched === left.length) finish();

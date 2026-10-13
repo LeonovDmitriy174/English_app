@@ -13,6 +13,19 @@ export function shortMeaning(card) {
   return seg && seg.length <= MAX_MEANING ? seg : null;
 }
 
+/**
+ * Ступень размера шрифта для столбца плиток: 0 обычный, 1 помельче, 2 самый мелкий. Смотрит на самый длинный кусок, который
+ * не переносится (слово между пробелами и дефисами): «good-for-nothing» переносится по дефисам и остаётся обычным, а «responsibility»
+ * рвалось бы посреди слова, поэтому весь столбец набирается мельче. Шрифт един для всего столбца: плитки выглядят одинаково.
+ * texts — строка или список строк; side: "l" (слова) или "r" (переводы).
+ */
+export function sizeStep(texts, side) {
+  const list = Array.isArray(texts) ? texts : [texts];
+  const longest = Math.max(0, ...list.flatMap((t) => String(t ?? "").split(/[\s\-–—]+/)).map((w) => [...w].length));
+  const [a, b] = side === "l" ? [12, 15] : [14, 17];
+  return longest <= a ? 0 : longest <= b ? 1 : 2;
+}
+
 const shuffle = (list, rnd) => {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {

@@ -43,15 +43,21 @@ export async function init() {
   }
   if (Number.isFinite(kvBackup?.value?.at)) app.backup.at = kvBackup.value.at;
   if (Number.isFinite(kvBackup?.value?.snoozeUntil)) app.backup.snoozeUntil = kvBackup.value.snoozeUntil;
+  const moved = [];
   for (const c of cards) {
     if (!c.srs) {
       // карточка из версий 1–2 (алгоритм FSRS): переводим в уровни
       c.srs = levels.fromLegacy(c.fsrs);
       delete c.fsrs;
-      await db.put("cards", c);
+      moved.push(c);
+    } else if (levels.needsMigration(c.srs)) {
+      // уровни, записанные по прежней лестнице (до 4.4): переводим на нынешнюю
+      c.srs = levels.migrateSrs(c.srs);
+      moved.push(c);
     }
     app.cards.set(c.id, c);
   }
+  if (moved.length) await db.putMany("cards", moved); // одной записью: тысячи карточек по одной переводились бы долго
   app.books = books.sort((a, b) => (b.opened || b.added) - (a.opened || a.added));
   Object.assign(app.settings, kvSettings?.value || {});
   app.settings.mixModes = normalizeMix(app.settings.mixModes);

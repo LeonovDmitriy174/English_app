@@ -44,9 +44,9 @@ test("лесенка при всех режимах: узнать, выбрат�
   assert.deepEqual(seen(0), ["choice"]);
   assert.deepEqual(seen(1), ["choice", "choiceBack", "listenChoice"]);
   assert.deepEqual(seen(2), ["choiceBack", "clozeChoice", "listenChoice"]);
-  assert.deepEqual(seen(3), ["cloze", "clozeChoice", "spell"]);
-  assert.deepEqual(seen(4), ["cloze", "listenType", "spell"]);
-  assert.deepEqual(seen(9), ["cloze", "listenType", "spell"]);
+  for (const lv of [3, 4, 5]) assert.deepEqual(seen(lv), ["cloze", "clozeChoice", "spell"], `уровень ${lv}`);
+  assert.deepEqual(seen(6), ["cloze", "listenType", "spell"], "с шестого уровня («Знаю») слово вспоминаем сами");
+  assert.deepEqual(seen(10), ["cloze", "listenType", "spell"]);
 });
 
 test("фразовому глаголу и идиоме добавляются частица и слово во фразе, глаголу форма слова", () => {
@@ -54,31 +54,32 @@ test("фразовому глаголу и идиоме добавляются �
   assert.deepEqual(seen(1, DEFAULT_MIX, all), ["choice", "choiceBack", "listenChoice", "phraseChoice"]);
   assert.deepEqual(seen(2, DEFAULT_MIX, all), ["choiceBack", "clozeChoice", "formChoice", "listenChoice", "phraseChoice"]);
   assert.deepEqual(seen(3, DEFAULT_MIX, all), ["cloze", "clozeChoice", "formChoice", "spell"]);
-  assert.deepEqual(seen(4, DEFAULT_MIX, all), ["cloze", "listenType", "spell"], "на высоких уровнях по-прежнему вспоминаем сами");
+  assert.deepEqual(seen(5, DEFAULT_MIX, all), ["cloze", "clozeChoice", "formChoice", "spell"]);
+  assert.deepEqual(seen(6, DEFAULT_MIX, all), ["cloze", "listenType", "spell"], "на высоких уровнях по-прежнему вспоминаем сами");
   assert.deepEqual(seen(2, DEFAULT_MIX, (t) => t !== "formChoice" && t !== "clozeChoice" && t !== "cloze" ? true : false), ["choiceBack", "listenChoice", "phraseChoice"]);
 });
 
 test("Диктант: слова с высоким уровнем в режиме «Диктант», в Миксе по выбору", () => {
-  assert.deepEqual(seen(5, ["dictation"]), ["dictation"]);
-  assert.deepEqual(seen(5, [...DEFAULT_MIX, "dictation"]), ["cloze", "dictation", "listenType", "spell"]);
+  assert.deepEqual(seen(7, ["dictation"]), ["dictation"]);
+  assert.deepEqual(seen(7, [...DEFAULT_MIX, "dictation"]), ["cloze", "dictation", "listenType", "spell"]);
   assert.deepEqual(seen(0, ["dictation"]), ["choice"], "новое слово диктовать нельзя: оно начинается с выбора");
   assert.ok(isWritten("dictation") && capOf("dictation") === Infinity);
 });
 
 test("если для карточки нельзя собрать диктант, берётся его запасное задание", () => {
   const noDictation = (t) => t !== "dictation";
-  assert.deepEqual(seen(5, ["dictation"], noDictation), ["listenType"]);
-  assert.deepEqual(seen(5, ["dictation"], (t) => t === "spell"), ["spell"], "а без озвучки — написание");
-  assert.deepEqual(seen(5, ["dictation"], () => false), ["choice"]);
+  assert.deepEqual(seen(7, ["dictation"], noDictation), ["listenType"]);
+  assert.deepEqual(seen(7, ["dictation"], (t) => t === "spell"), ["spell"], "а без озвучки — написание");
+  assert.deepEqual(seen(7, ["dictation"], () => false), ["choice"]);
 });
 
 test("ступени растут вместе с уровнем", () => {
-  const ranks = [0, 1, 2, 3, 4].map((lv) => band(lv));
+  const ranks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((lv) => band(lv));
   for (let i = 1; i < ranks.length; i++) assert.ok(ranks[i][0] >= ranks[i - 1][0] && ranks[i][1] >= ranks[i - 1][1]);
 });
 
 test("выключенные режимы не появляются", () => {
-  for (let lv = 0; lv <= 8; lv++) {
+  for (let lv = 0; lv <= 10; lv++) {
     const tasks = seen(lv, ["spell", "listen"]);
     assert.ok(tasks.every((t) => ["spell", "listenChoice", "listenType"].includes(t)), `уровень ${lv}: ${tasks}`);
   }
@@ -86,6 +87,7 @@ test("выключенные режимы не появляются", () => {
 
 test("если задания своей ступени выключены, берётся ближайшее", () => {
   assert.deepEqual(seen(4, ["choice"]), ["choiceBack"], "только Выбор: на высоком уровне самое трудное, что есть");
+  assert.deepEqual(seen(8, ["choice"]), ["choiceBack"]);
   assert.deepEqual(seen(1, ["spell"]).length, 1);
   assert.deepEqual(seen(6, ["spell"]), ["spell"]);
 });
@@ -99,19 +101,19 @@ test("новое слово без режимов узнавания начин�
 
 test("если задание невозможно (нет предложения, нет озвучки), оно пропускается", () => {
   const noCloze = (t) => !["cloze", "clozeChoice"].includes(t);
-  for (let lv = 0; lv <= 6; lv++) assert.ok(seen(lv, DEFAULT_MIX, noCloze).every(noCloze), `уровень ${lv}`);
+  for (let lv = 0; lv <= 10; lv++) assert.ok(seen(lv, DEFAULT_MIX, noCloze).every(noCloze), `уровень ${lv}`);
   const noSound = (t) => !t.startsWith("listen");
-  assert.deepEqual(seen(4, DEFAULT_MIX, noSound), ["cloze", "spell"]);
+  assert.deepEqual(seen(6, DEFAULT_MIX, noSound), ["cloze", "spell"]);
   assert.deepEqual(seen(3, DEFAULT_MIX, () => false), ["choice"], "ничего не возможно: запасной выбор");
 });
 
-test("потолки: выбор до 3 уровня, выбор в предложении до 4, письменные без потолка", () => {
-  assert.equal(capOf("choice"), 3);
-  assert.equal(capOf("choiceBack"), 3);
-  assert.equal(capOf("listenChoice"), 3);
-  assert.equal(capOf("clozeChoice"), 4);
-  assert.equal(capOf("phraseChoice"), 3);
-  assert.equal(capOf("formChoice"), 4);
+test("потолки: выбор до 4 уровня (сутки), выбор в предложении до 6 (три дня), письменные без потолка", () => {
+  assert.equal(capOf("choice"), 4);
+  assert.equal(capOf("choiceBack"), 4);
+  assert.equal(capOf("listenChoice"), 4);
+  assert.equal(capOf("clozeChoice"), 6);
+  assert.equal(capOf("phraseChoice"), 4);
+  assert.equal(capOf("formChoice"), 6);
   for (const t of ["spell", "cloze", "listenType", "dictation"]) assert.equal(capOf(t), Infinity);
   assert.equal(capOf("неизвестное"), Infinity);
 });
@@ -128,7 +130,7 @@ test("мягкое задание только одно: в форме слов�
 
 test("лесенка и потолки согласованы: каждое задание ступени может поднять слово", () => {
   // слово на уровне lv получает только задания, которые поднимут его выше lv (или оно уже на потолке заданий ступени)
-  for (let lv = 0; lv <= 9; lv++) {
+  for (let lv = 0; lv <= 10; lv++) {
     for (const t of seen(lv, DEFAULT_MIX, () => true)) assert.ok(capOf(t) > lv, `уровень ${lv}: задание ${t} с потолком ${capOf(t)} не может поднять слово`);
   }
 });
@@ -141,10 +143,10 @@ test("запасные задания ведут к более лёгким и �
   }
 });
 
-test("полный путь слова: только выбор растёт до 3 уровня и останавливается", () => {
+test("полный путь слова: только выбор растёт до 4 уровня и останавливается", () => {
   let s = newSrs();
   for (let i = 0; i < 12; i++) s = answer(s, "ok", { cap: capOf("choice") });
-  assert.equal(s.lv, 3);
+  assert.equal(s.lv, 4);
   const w = answer(s, "ok", { cap: capOf("spell"), written: true });
-  assert.equal(w.lv, 4, "написанный ответ поднимает дальше");
+  assert.equal(w.lv, 5, "написанный ответ поднимает дальше");
 });

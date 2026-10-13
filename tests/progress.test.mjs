@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { groupOf, levelSpread, lastDays, reviewsByDay, streak, accuracy, shortDate } from "../js/progress.js";
-import { studyDay, PIPS } from "../js/levels.js";
+import { studyDay, KNOWN, MAX_LEVEL } from "../js/levels.js";
 
 const at = (d, h = 12, m = 0) => new Date(2026, 9, d, h, m).getTime(); // октябрь 2026
 const NOW = at(12, 15, 0);
@@ -19,15 +19,17 @@ test("группы уровней", () => {
   assert.equal(groupOf(0), "new");
   assert.equal(groupOf(undefined), "new");
   assert.equal(groupOf(1), "learning");
-  assert.equal(groupOf(3), "learning");
-  assert.equal(groupOf(4), "known");
-  assert.equal(groupOf(PIPS), "known");
-  assert.equal(groupOf(PIPS + 1), "mastered");
-  assert.equal(groupOf(10), "mastered");
+  assert.equal(groupOf(KNOWN - 1), "learning", "до пятого уровня включительно слово учится");
+  assert.equal(groupOf(5), "learning");
+  assert.equal(groupOf(KNOWN), "known", "с шестого уровня (три дня между повторами) слово знакомо");
+  assert.equal(groupOf(9), "known");
+  assert.equal(groupOf(MAX_LEVEL), "mastered", "последний уровень (28 дней) это «Освоено»");
+  assert.equal(KNOWN, 6);
+  assert.equal(MAX_LEVEL, 10);
 });
 
 test("распределение по уровням не считает слова «не повторять»", () => {
-  const cards = [{ srs: { lv: 0 } }, { srs: { lv: 2 } }, { srs: { lv: 2 } }, { srs: { lv: 5 } }, { srs: { lv: 9 } }, { srs: { lv: 9 }, skip: true }, {}];
+  const cards = [{ srs: { lv: 0 } }, { srs: { lv: 2 } }, { srs: { lv: 2 } }, { srs: { lv: 7 } }, { srs: { lv: 10 } }, { srs: { lv: 10 }, skip: true }, {}];
   assert.deepEqual(levelSpread(cards), { total: 6, new: 2, learning: 2, known: 1, mastered: 1 });
   assert.deepEqual(levelSpread([]), { total: 0, new: 0, learning: 0, known: 0, mastered: 0 });
 });

@@ -98,7 +98,7 @@ export async function importData(text) {
     if (!c.srs) {
       c.srs = levels.fromLegacy(c.fsrs);
       delete c.fsrs;
-    }
+    } else c.srs = levels.migrateSrs(c.srs); // копия, снятая по прежней лестнице уровней, переводится на нынешнюю
     const mine = app.cards.get(c.id);
     if (!mine || (c.srs.reps || 0) > (mine.srs.reps || 0) || (c.srs.last || 0) > (mine.srs.last || 0)) better.push(c);
   }

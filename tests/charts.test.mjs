@@ -5,6 +5,7 @@ import {
   learnedSeries, learnedRecent, nearestPoint, describePoint, readByDay, bookMap, readingPace, finishEstimate, paceLine,
 } from "../js/charts.js";
 import { groupOf, levelSpread } from "../js/progress.js";
+import { LADDER } from "../js/levels.js";
 
 const at = (m, d, h = 12, min = 0) => new Date(2026, m - 1, d, h, min).getTime(); // месяц с 1
 const NOW = at(10, 12, 15, 0); // понедельник, 12 октября 2026
@@ -98,18 +99,18 @@ test("подпись дня: повторения и чтение или «за�
 
 // ── выучено слов ────────────────────────────────────────────────────────────
 const card = (id, lv, extra = {}) => ({ id, srs: { lv, last: null }, added: at(9, 1), ...extra });
-const row = (id, t, lv) => ({ id, t, lv, result: "ok" });
+const row = (id, t, lv) => ({ id, t, lv, v: LADDER, result: "ok" });
 
 test("кривая «Выучено слов»: каждое слово — в день, когда оно впервые стало «Знаю»; конец равен числу на главной", () => {
   const cards = [
-    card("w:a", 5),
-    card("w:b", 4),
-    card("w:c", 3), // выучено было, но упало ниже «Знаю»: в кривую не входит
-    card("w:d", 6, { skip: true }),
-    card("w:e", 5, { srs: { lv: 5, last: at(10, 1) } }), // журнала нет: день последнего ответа
+    card("w:a", 8),
+    card("w:b", 6),
+    card("w:c", 5), // выучено было, но упало ниже «Знаю»: в кривую не входит
+    card("w:d", 9, { skip: true }),
+    card("w:e", 7, { srs: { lv: 7, last: at(10, 1) } }), // журнала нет: день последнего ответа
     card("w:f", 0),
   ];
-  const log = [row("w:a", at(10, 2), 3), row("w:a", at(10, 5), 4), row("w:a", at(10, 9), 5), row("w:b", at(9, 20), 4), row("w:b", at(9, 25), 3), row("w:b", at(10, 3), 4), row("w:c", at(9, 22), 4), row("w:c", at(9, 23), 2), row("w:zzz", at(9, 1), 7)];
+  const log = [row("w:a", at(10, 2), 5), row("w:a", at(10, 5), 6), row("w:a", at(10, 9), 7), row("w:b", at(9, 20), 6), row("w:b", at(9, 25), 5), row("w:b", at(10, 3), 6), row("w:c", at(9, 22), 6), row("w:c", at(9, 23), 3), row("w:zzz", at(9, 1), 10)];
   const s = learnedSeries(cards, log, NOW);
   assert.equal(s.total, 3);
   const by = Object.fromEntries(s.points.map((p) => [p.day, p.n]));
@@ -119,7 +120,7 @@ test("кривая «Выучено слов»: каждое слово — в �
   assert.equal(by["2026-09-30"], 1);
   assert.equal(by["2026-10-01"], 2, "e: по дню последнего ответа");
   assert.equal(by["2026-10-04"], 2);
-  assert.equal(by["2026-10-05"], 3, "a: 5 октября, а не 9-го, когда стало 5");
+  assert.equal(by["2026-10-05"], 3, "a: 5 октября, а не 9-го, когда стало 7");
   assert.equal(s.points.at(-1).day, "2026-10-12");
   assert.equal(s.points.at(-1).n, 3);
   assert.equal(s.points.length, 24, "за каждый день");
@@ -130,16 +131,16 @@ test("кривая «Выучено слов»: каждое слово — в �
 });
 
 test("кривая: без выученных слов её нет; новая — не короче двух недель", () => {
-  assert.equal(learnedSeries([card("w:a", 3), card("w:b", 6, { skip: true })], [], NOW), null);
-  assert.equal(learnedRecent([card("w:a", 3)], [], NOW), null);
-  const s = learnedSeries([card("w:a", 4)], [row("w:a", at(10, 11), 4)], NOW);
+  assert.equal(learnedSeries([card("w:a", 5), card("w:b", 9, { skip: true })], [], NOW), null);
+  assert.equal(learnedRecent([card("w:a", 5)], [], NOW), null);
+  const s = learnedSeries([card("w:a", 6)], [row("w:a", at(10, 11), 6)], NOW);
   assert.equal(s.points.length, 15);
   assert.equal(s.points[0].n, 0);
   assert.equal(s.points.at(-1).n, 1);
 });
 
 test("кривая за долгий срок берёт точки раз в неделю и заканчивается сегодняшним днём", () => {
-  const s = learnedSeries([card("w:a", 5), card("w:b", 5)], [row("w:a", NOW - 200 * DAY, 4), row("w:b", NOW - 30 * DAY, 4)], NOW);
+  const s = learnedSeries([card("w:a", 7), card("w:b", 7)], [row("w:a", NOW - 200 * DAY, 6), row("w:b", NOW - 30 * DAY, 6)], NOW);
   assert.ok(s.points.length < 50 && s.points.length > 25, `точек: ${s.points.length}`);
   assert.equal(s.points.at(-1).day, "2026-10-12");
   assert.equal(s.points.at(-1).n, 2);
@@ -152,7 +153,7 @@ test("кривая за долгий срок берёт точки раз в н
 
 test("шкала кривой растёт вместе со словарём: верх всегда выше числа слов, цели нет", () => {
   for (const total of [1, 2, 3, 10, 37, 99, 100, 187, 1000, 5000]) {
-    const cards = Array.from({ length: total }, (_, i) => card(`w:${i}`, 5, { srs: { lv: 5, last: NOW - (i % 30) * DAY } }));
+    const cards = Array.from({ length: total }, (_, i) => card(`w:${i}`, 7, { srs: { lv: 7, last: NOW - (i % 30) * DAY } }));
     const s = learnedSeries(cards, [], NOW);
     assert.equal(s.total, total);
     assert.ok(s.max > total, `${total}: верх шкалы ${s.max}`);
@@ -164,8 +165,8 @@ test("шкала кривой растёт вместе со словарём: �
 });
 
 test("маленький график для главной: последние дни той же кривой", () => {
-  const cards = [card("w:a", 5), card("w:b", 5)];
-  const log = [row("w:a", NOW - 40 * DAY, 4), row("w:b", NOW - 3 * DAY, 4)];
+  const cards = [card("w:a", 7), card("w:b", 7)];
+  const log = [row("w:a", NOW - 40 * DAY, 6), row("w:b", NOW - 3 * DAY, 6)];
   const r = learnedRecent(cards, log, NOW, 30);
   assert.equal(r.length, 30);
   assert.equal(r[0], 1, "первое слово выучено раньше окна");
@@ -255,4 +256,15 @@ test("фраза про темп", () => {
   assert.match(paceLine({ perDay: 1400 }, { days: 100 }, NOW), /около 1,4 тыс\. слов в день/);
   assert.equal(paceLine({ perDay: 20 }, { days: 5000 }, NOW), "В таком темпе (около 20 слов в день) это больше двух лет.");
   assert.match(paceLine({ perDay: 3 }, { days: 12 }, NOW), /около 10 слов/, "меньше десяти не пишем");
+});
+
+test("строки журнала, записанные по прежней лестнице (без v), переводятся: прежний 4-й уровень ещё не «Знаю», 5-й уже да", () => {
+  const cards = [card("w:old4", 7), card("w:old5", 7)];
+  const raw = (id, t, lv) => ({ id, t, lv, result: "ok" }); // старая строка: метки v нет
+  const log = [raw("w:old4", at(10, 3), 4), raw("w:old4", at(10, 8), 5), raw("w:old5", at(10, 4), 5)];
+  const s = learnedSeries(cards, log, NOW);
+  const by = Object.fromEntries(s.points.map((p) => [p.day, p.n]));
+  assert.equal(by["2026-10-04"], 1, "old5: прежний 5-й уровень (7 дней) = нынешний 7-й, выучено 4 октября");
+  assert.equal(by["2026-10-07"], 1, "old4: прежний 4-й уровень (3 дня) = нынешний 5-й, ещё не «Знаю»");
+  assert.equal(by["2026-10-08"], 2, "old4 выучено, когда прежний уровень стал 5-м");
 });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { shortMeaning, pickPairs, rightOrder, PAIRS, MIN_PAIRS } from "../js/pairs.js";
+import { shortMeaning, pickPairs, rightOrder, sizeStep, PAIRS, MIN_PAIRS } from "../js/pairs.js";
 
 const seeded = (seed = 1) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const card = (w, ru, extra = {}) => ({ id: `w:${w}`, w, ru, ...extra });
@@ -51,4 +51,29 @@ test("порядок переводов перемешан и не совпад�
   assert.deepEqual(rightOrder([{ id: "x" }]), ["x"]);
   const three = rightOrder(["a", "b", "c"].map((id) => ({ id })), () => 0);
   assert.notDeepEqual(three, ["a", "b", "c"]);
+});
+
+test("шрифт столбца зависит от самого длинного куска без переноса: рваться посреди слова плитка не должна", () => {
+  assert.equal(sizeStep("hum", "l"), 0);
+  assert.equal(sizeStep("expectation", "l"), 0);
+  assert.equal(sizeStep("good-for-nothing", "l"), 0, "переносится по дефисам: самый длинный кусок nothing");
+  assert.equal(sizeStep("responsibility", "l"), 1);
+  assert.equal(sizeStep("misunderstanding", "l"), 2);
+  assert.equal(sizeStep("надеяться", "r"), 0);
+  assert.equal(sizeStep("вовлечённый, причастный", "r"), 0, "две строки по пробелу");
+  assert.equal(sizeStep("противоположность", "r"), 1);
+  assert.equal(sizeStep("", "l"), 0);
+  assert.equal(sizeStep(undefined, "r"), 0);
+  // столбец целиком: одно длинное слово делает мельче весь столбец, шрифт у плиток один
+  assert.equal(sizeStep(["expect", "good-for-nothing", "involved", "proud", "hum"], "l"), 0);
+  assert.equal(sizeStep(["expect", "responsibility", "hum"], "l"), 1);
+  // шаг не убывает с длиной
+  for (const side of ["l", "r"]) {
+    let prev = 0;
+    for (let n = 1; n <= 40; n++) {
+      const step = sizeStep("x".repeat(n), side);
+      assert.ok(step >= prev);
+      prev = step;
+    }
+  }
 });

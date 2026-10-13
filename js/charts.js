@@ -3,12 +3,12 @@
 //
 // Везде одно правило: показываем то, что уже сделано. Ни целей, ни планок, ни времени следующих повторений: кривая слов не упирается в «потолок»,
 // шкала растёт вместе со словарём. Прогноз есть только у книги («в таком темпе дочитаете…») и считается по вашему же темпу.
-import { studyDay } from "./levels.js";
+import { studyDay, KNOWN, levelInLadder } from "./levels.js";
 import { lastDays } from "./progress.js";
 import { readOn, wordsOn, fmtDuration, MIN_ACTIVE_SEC } from "./activity.js";
 import { bookWords, wordsRead, isFinished, readFraction, chapterIndex, fmtWords } from "./reading.js";
 
-export const LEARNED = 4; // с какого уровня слово «выучено»: «Знаю» и выше (groupOf в progress.js)
+export const LEARNED = KNOWN; // с какого уровня слово «выучено»: «Знаю» и выше (groupOf в progress.js)
 export const HEAT_WEEKS = 17; // сколько недель в календаре занятий
 export const HEAT_SEC_PER_REVIEW = 30; // для насыщенности цвета полминуты чтения равны одному повторению
 export const PACE_DAYS = 14; // за сколько последних дней считается темп чтения
@@ -106,7 +106,8 @@ function learnedDates(cards, log, now) {
   if (!learned.size) return null;
   const first = new Map();
   for (const e of log || []) {
-    if (!(e.lv >= LEARNED) || !learned.has(e.id)) continue;
+    // строки журнала, записанные по прежней лестнице (без v), переводятся на нынешнюю
+    if (!(levelInLadder(e.lv, e.v) >= LEARNED) || !learned.has(e.id)) continue;
     const t = first.get(e.id);
     if (t === undefined || e.t < t) first.set(e.id, e.t);
   }

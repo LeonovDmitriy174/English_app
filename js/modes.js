@@ -22,8 +22,8 @@
 //   0 (новое)       choice
 //   1               choice, choiceBack, listenChoice, phraseChoice
 //   2               choiceBack, listenChoice, phraseChoice, clozeChoice, formChoice
-//   3               clozeChoice, formChoice, spell, cloze
-//   4 и выше        spell, cloze, listenType, dictation
+//   3–5             clozeChoice, formChoice, spell, cloze
+//   6 и выше        spell, cloze, listenType, dictation
 //
 // phraseChoice бывает только у фразовых глаголов и идиом, formChoice только у глаголов и прилагательных, у которых
 // можно построить формы; у остальных слов этих заданий просто нет.
@@ -32,8 +32,9 @@
 // диапазон рангов (band). Из включённых режимов берутся задания своей ступени; если таких нет, то ближайшие.
 //
 // Потолок (cap): задания с выбором из вариантов поднимают слово не выше своего потолка. Угадать верный вариант
-// из четырёх можно и не зная слова, поэтому выше 3 уровня (больше суток между повторами) слово растёт только
+// из четырёх можно и не зная слова, поэтому выше 4 уровня (сутки между повторами) слово растёт только
 // от заданий, где его нужно вспомнить самому: написать, вписать в предложение, написать на слух.
+// Выбор в предложении (clozeChoice, formChoice) труднее простого выбора и доводит слово до 6 уровня (три дня).
 //
 // «Мягкие» задания (LENIENT): у них возможен не один верный вариант (в предложении подошли бы и grew, и grows),
 // поэтому неверный выбор в них засчитывается как «почти» и уровень не сбрасывает; сбрасывает только явное «Не знаю».
@@ -47,12 +48,12 @@ export const MODES = [
 ];
 
 export const TASKS = {
-  choice: { rank: 1, cap: 3, written: false },
-  listenChoice: { rank: 2, cap: 3, written: false },
-  choiceBack: { rank: 2, cap: 3, written: false },
-  phraseChoice: { rank: 2, cap: 3, written: false },
-  clozeChoice: { rank: 3, cap: 4, written: false },
-  formChoice: { rank: 3, cap: 4, written: false },
+  choice: { rank: 1, cap: 4, written: false },
+  listenChoice: { rank: 2, cap: 4, written: false },
+  choiceBack: { rank: 2, cap: 4, written: false },
+  phraseChoice: { rank: 2, cap: 4, written: false },
+  clozeChoice: { rank: 3, cap: 6, written: false },
+  formChoice: { rank: 3, cap: 6, written: false },
   spell: { rank: 4, cap: Infinity, written: true },
   cloze: { rank: 4, cap: Infinity, written: true },
   listenType: { rank: 5, cap: Infinity, written: true },
@@ -78,7 +79,7 @@ export function band(lv = 0) {
   if (lv <= 0) return [1, 1];
   if (lv === 1) return [1, 2];
   if (lv === 2) return [2, 3];
-  if (lv === 3) return [3, 4];
+  if (lv <= 5) return [3, 4];
   return [4, 5];
 }
 

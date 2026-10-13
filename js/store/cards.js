@@ -113,7 +113,7 @@ export async function answerCard(id, result, { task = "", written, now = Date.no
   else c.srs = levels.answer(c.srs, result, { written: wr, now, cap: capOf(task), repeat: !lapse });
   if (ctxText) c.lastCtx = ctxText;
   await db.put("cards", c);
-  await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv, ...(Number.isFinite(ms) ? { ms: Math.round(ms) } : {}) });
+  await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv, v: levels.LADDER, ...(Number.isFinite(ms) ? { ms: Math.round(ms) } : {}) });
   if (before === 0) {
     if (app.daily.day !== today()) app.daily = { day: today(), newDone: 0 };
     app.daily.newDone += 1;

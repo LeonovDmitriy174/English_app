@@ -9,8 +9,8 @@ test("слово становится трудным после четырёх �
   assert.equal(LEECH_LAPSES, 4);
   assert.ok(!isLeech({ lv: 2, lapses: 3 }));
   assert.ok(isLeech({ lv: 2, lapses: 4 }));
-  assert.ok(isLeech({ lv: PIPS, lapses: 9 }));
-  assert.ok(!isLeech({ lv: PIPS + 1, lapses: 9 }), "дошло до уровня выше последней точки индикатора");
+  assert.ok(isLeech({ lv: PIPS - 1, lapses: 9 }));
+  assert.ok(!isLeech({ lv: PIPS, lapses: 9 }), "дошло до последнего уровня (28 дней)");
   assert.ok(!isLeech(undefined));
 });
 
