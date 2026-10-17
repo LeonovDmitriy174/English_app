@@ -43,7 +43,10 @@ export function renderDict(root) {
   const search = h("div", { class: "search" }, icon("search", 20), input);
   const controls = h("div", null, search, chips);
 
-  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Добавить слово", onClick: () => openAddWord() }, icon("plus", 24)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), controls, list);
+  // Частотные слова по порядку: проверка знаний, из которой слова попадают в словарь (js/views/replenish.js)
+  const replenish = h("button", { class: "rp-entry", onClick: () => (location.hash = "#/replenish") }, icon("list", 22), h("span", { class: "rp-entry-t" }, h("b", null, "Пополнить словарь"), h("small", null, "Проверка частотных слов: верные добавятся как знакомые")), icon("next", 18));
+
+  const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Добавить слово", onClick: () => openAddWord() }, icon("plus", 24)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), replenish, controls, list);
   root.replaceChildren(h("main", { class: "view" }, page));
 
   function counts() {

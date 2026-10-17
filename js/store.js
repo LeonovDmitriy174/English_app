@@ -1,7 +1,7 @@
 // store.js — точка входа для экранов: запуск приложения и всё, что они берут из хранилища.
 // Устройство хранилища (js/store/): state — общее состояние, lexicon — словарь, settings, cards — слова и очередь повторения,
 // contexts — предложения из книг для заданий, books — книги и разбор, folders и catalog — папки и встроенные книги,
-// notes — заметки, data — копии данных и сведения для отладки.
+// notes — заметки, replenish — «Пополнить словарь», data — копии данных и сведения для отладки.
 import { db } from "./db.js";
 import * as levels from "./levels.js";
 import { normalizeMix } from "./modes.js";
@@ -24,6 +24,7 @@ export * from "./store/catalog.js";
 export * from "./store/notes.js";
 export * from "./store/data.js";
 export * from "./store/activity.js";
+export * from "./store/replenish.js";
 
 // после повторной загрузки словаря нужно разобрать книги и найти предложения для слов
 onDictionaryRetried(() => ensureAnalysis().then(() => ensureContexts()));

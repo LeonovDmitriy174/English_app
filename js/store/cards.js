@@ -19,7 +19,8 @@ export function resolveWord(raw) {
 
 export const cardFor = (entry) => (entry ? app.cards.get(entry.id) : undefined);
 
-export async function saveCard(entry, ctx) {
+/** Добавляет слово в словарь (или дописывает предложение к имеющемуся). opts.srs — готовый уровень вместо «нового» (js/freqdeck.js). */
+export async function saveCard(entry, ctx, { srs } = {}) {
   let c = app.cards.get(entry.id);
   if (!c) {
     c = {
@@ -33,7 +34,7 @@ export async function saveCard(entry, ctx) {
       ex: entry.ex || "",
       custom: !!entry.custom,
       ctx: [],
-      srs: levels.newSrs(),
+      srs: srs || levels.newSrs(),
       added: Date.now(),
     };
   }

@@ -268,3 +268,17 @@ test("строки журнала, записанные по прежней ле
   assert.equal(by["2026-10-07"], 1, "old4: прежний 4-й уровень (3 дня) = нынешний 5-й, ещё не «Знаю»");
   assert.equal(by["2026-10-08"], 2, "old4 выучено, когда прежний уровень стал 5-м");
 });
+
+test("календарь: проверка слов в «Пополнить словарь» делает день занятым, но повторением не считается", () => {
+  const rows = [
+    { id: "w:a", t: at(10, 10, 12), result: "no", task: "freq" },
+    { id: "w:b", t: at(10, 10, 12, 1), result: "ok", task: "freq" },
+    { id: "w:c", t: at(10, 12, 9), result: "ok", task: "choice" },
+  ];
+  const g = activityGrid(rows, { read: {} }, NOW);
+  const cell = (day) => g.cells.find((c) => c.day === day);
+  assert.deepEqual([cell("2026-10-10").n, cell("2026-10-10").check, cell("2026-10-10").active], [0, 2, true]);
+  assert.deepEqual([cell("2026-10-12").n, cell("2026-10-12").check], [1, 0]);
+  assert.equal(describeDay({ day: "2026-10-10", n: 0, check: 2, sec: 0 }), "сб, 10 октября: проверено слов: 2");
+  assert.equal(describeDay({ day: "2026-10-12", n: 3, check: 40, sec: 600 }), "пн, 12 октября: 3 повторения, проверено слов: 40, чтение 10 мин");
+});

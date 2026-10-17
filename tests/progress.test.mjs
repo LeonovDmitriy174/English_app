@@ -86,3 +86,16 @@ test("короткая дата", () => {
   assert.equal(shortDate("2026-10-02"), "02.10");
   assert.equal(shortDate("2026-12-31"), "31.12");
 });
+
+test("проверка в «Пополнить словарь» не считается повторением и не портит точность, но продлевает серию", () => {
+  const rows = [
+    { t: at(12, 10), result: "ok", task: "choice" },
+    { t: at(12, 11), result: "no", task: "freq" },
+    { t: at(12, 11, 5), result: "no", task: "freq" },
+    { t: at(11, 11), result: "ok", task: "freq" },
+  ];
+  const days = reviewsByDay(rows, NOW, 3);
+  assert.deepEqual(days.map((d) => [d.n, d.ok]), [[0, 0], [0, 0], [1, 1]], "в счёт идёт только настоящее повторение");
+  assert.equal(accuracy(days), 1, "ошибки при проверке незнакомых слов точность не снижают");
+  assert.equal(streak(rows, NOW), 2, "а день с проверкой занятым остаётся: 11 и 12 октября");
+});

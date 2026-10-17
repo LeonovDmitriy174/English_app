@@ -46,8 +46,8 @@ jobs:
             node --check "$f" || exit 1
           done
 
-      - name: Тесты Python (словарь и каталог книг)
-        run: python3 -m unittest tests/test_build_dict.py tests/test_translate_glosses.py tests/test_build_catalog.py
+      - name: Тесты Python (словарь, частотный список и каталог книг)
+        run: python3 -m unittest tests/test_build_dict.py tests/test_translate_glosses.py tests/test_build_catalog.py tests/test_build_freq.py
 
       # Приложение целиком в настоящем браузере (tests/e2e/smoke.py): то же, что у вас npm run test:e2e. Один повтор на случай,
       # если браузер на только что запущенной машине «моргнул»: настоящая поломка упадёт и со второго раза.

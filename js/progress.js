@@ -2,6 +2,7 @@
 // Время следующего повторения здесь не считается и не показывается. Чистые функции без DOM: проверяются в Node (tests/progress.test.mjs).
 import { studyDay, KNOWN, MAX_LEVEL } from "./levels.js";
 import { readDays } from "./activity.js";
+import { FREQ_TASK } from "./freqdeck.js";
 
 /** Группы уровней: новое слово; слово, которое учится (1–5); знакомое (6–9, от трёх дней между повторами); освоенное (последний уровень, 28 дней). */
 export const GROUPS = [
@@ -48,6 +49,7 @@ export function reviewsByDay(log, now = Date.now(), n = 14) {
   const rows = lastDays(now, n).map((day) => ({ day, n: 0, ok: 0 }));
   const at = new Map(rows.map((r) => [r.day, r]));
   for (const e of log || []) {
+    if (e.task === FREQ_TASK) continue; // проверка в «Пополнить словарь» не повторение: серию дней она продлевает, а в счёт повторений и точности не идёт
     const r = at.get(studyDay(e.t));
     if (!r) continue;
     r.n += 1;

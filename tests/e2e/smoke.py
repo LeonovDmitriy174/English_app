@@ -122,6 +122,14 @@ def main():
         page.wait_for_selector(".rv-stage", timeout=10000)
         check(True, "заход начался")
 
+        # «Пополнить словарь»: кнопка в словаре ведёт на экран; в тестовом словаре слов мало, поэтому честное «Пока нет слов»
+        page.evaluate("location.hash = '#/dict'")
+        page.wait_for_selector(".rp-entry")
+        page.click(".rp-entry")
+        page.wait_for_selector("h1.title:has-text('Пополнить словарь')")
+        page.wait_for_selector(".empty .lead:has-text('Пока нет слов для проверки')", timeout=5000)
+        check("false" not in page.inner_text(".page"), "«Пополнить словарь» открывается, лишнего текста нет")
+
         print("5. поиск и добавление слова без книги")
         page.evaluate("location.hash = '#/home'")
         page.wait_for_selector(".home .mark")

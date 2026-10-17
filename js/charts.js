@@ -7,10 +7,12 @@ import { studyDay, KNOWN, levelInLadder } from "./levels.js";
 import { lastDays } from "./progress.js";
 import { readOn, wordsOn, fmtDuration, MIN_ACTIVE_SEC } from "./activity.js";
 import { bookWords, wordsRead, isFinished, readFraction, chapterIndex, fmtWords } from "./reading.js";
+import { FREQ_TASK } from "./freqdeck.js";
 
 export const LEARNED = KNOWN; // с какого уровня слово «выучено»: «Знаю» и выше (groupOf в progress.js)
 export const HEAT_WEEKS = 17; // сколько недель в календаре занятий
 export const HEAT_SEC_PER_REVIEW = 30; // для насыщенности цвета полминуты чтения равны одному повторению
+export const HEAT_CHECK = 0.2; // а проверка слова в «Пополнить словарь» (несколько секунд) равна пятой части повторения
 export const PACE_DAYS = 14; // за сколько последних дней считается темп чтения
 export const PACE_MIN_DAYS = 3; // меньше дней данных — темп не показываем
 export const PACE_MIN_WORDS = 600; // меньше слов — тоже
@@ -52,7 +54,7 @@ export const linePath = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixe
 // ── Календарь занятий ───────────────────────────────────────────────────────
 /**
  * Календарь занятий за weeks недель: колонки — недели с понедельника, строки — дни недели; последняя колонка кончается сегодняшним днём.
- * Возвращает { cells, weeks, months, activeDays }. Клетка: { day, col, row, n (повторений), sec (чтения), active, level 0…4 }.
+ * Возвращает { cells, weeks, months, activeDays }. Клетка: { day, col, row, n (повторений), check (проверок слов в «Пополнить словарь»), sec (чтения), active, level 0…4 }.
  * День «занятый», как и для серии: хотя бы одно повторение или минута чтения. Насыщенность 1…4 — по месту дня среди занятых дней
  * календаря (четверти), поэтому цвет читается при любом темпе: у новичка и у того, кто повторяет сотни слов в день.
  */
@@ -60,15 +62,18 @@ export function activityGrid(log, activity, now = Date.now(), weeks = HEAT_WEEKS
   const row = weekdayOf(studyDay(now));
   const days = lastDays(now, (weeks - 1) * 7 + row + 1);
   const reviews = new Map(days.map((d) => [d, 0]));
+  const checks = new Map(days.map((d) => [d, 0])); // проверки слов в «Пополнить словарь»: занятие, но не повторение
   for (const e of log || []) {
     const d = studyDay(e.t);
-    if (reviews.has(d)) reviews.set(d, reviews.get(d) + 1);
+    const into = e.task === FREQ_TASK ? checks : reviews;
+    if (into.has(d)) into.set(d, into.get(d) + 1);
   }
   const cells = days.map((day, i) => {
     const n = reviews.get(day);
+    const check = checks.get(day);
     const sec = readOn(activity, day);
-    const active = n > 0 || sec >= MIN_ACTIVE_SEC;
-    return { day, col: Math.floor(i / 7), row: i % 7, n, sec, active, score: active ? n + sec / HEAT_SEC_PER_REVIEW : 0, level: 0 };
+    const active = n > 0 || check > 0 || sec >= MIN_ACTIVE_SEC;
+    return { day, col: Math.floor(i / 7), row: i % 7, n, check, sec, active, score: active ? n + check * HEAT_CHECK + sec / HEAT_SEC_PER_REVIEW : 0, level: 0 };
   });
   const scores = cells.filter((c) => c.active).map((c) => c.score);
   for (const c of cells) {
@@ -89,7 +94,7 @@ export function activityGrid(log, activity, now = Date.now(), weeks = HEAT_WEEKS
 
 /** Подпись к дню календаря и к столбику: «пн, 12 октября: 34 повторения, чтение 18 мин» или «…: занятий не было». */
 export function describeDay(cell) {
-  const parts = [cell.n && `${cell.n} ${plural(cell.n, ["повторение", "повторения", "повторений"])}`, cell.sec >= MIN_ACTIVE_SEC && `чтение ${fmtDuration(cell.sec)}`].filter(Boolean);
+  const parts = [cell.n && `${cell.n} ${plural(cell.n, ["повторение", "повторения", "повторений"])}`, cell.check && `проверено слов: ${cell.check}`, cell.sec >= MIN_ACTIVE_SEC && `чтение ${fmtDuration(cell.sec)}`].filter(Boolean);
   return `${fmtDayLong(cell.day)}: ${parts.length ? parts.join(", ") : "занятий не было"}`;
 }
 

@@ -14,6 +14,7 @@ import { applySettings } from "./settings.js";
 import { persistGroups } from "./folders.js";
 import { persistNotes } from "./notes.js";
 import { setActivity } from "./activity.js";
+import { exportReplenish, importReplenish } from "./replenish.js";
 
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
 
@@ -82,6 +83,7 @@ export async function exportData() {
       groups: app.groups,
       known: [...app.known],
       activity: app.activity,
+      freq: await exportReplenish(),
       log,
       progress: app.books.map((b) => ({ id: b.id, title: b.title, author: b.author, progress: b.progress, groups: (b.groups || []).filter(isUserGroup) })),
     },
@@ -141,6 +143,7 @@ export async function importData(text) {
     const merged = mergeActivity(app.activity, data.activity);
     if (merged.changed) await setActivity(merged.activity);
   }
+  if (data.freq) await importReplenish(data.freq); // «Пополнить словарь»: где остановились, сданные тесты, свой список слов
   if (Array.isArray(data.known)) {
     const before = app.known.size;
     for (const id of data.known) if (typeof id === "string") app.known.add(id);

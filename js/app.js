@@ -6,6 +6,7 @@ import { renderHome } from "./views/home.js";
 import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
+import { renderReplenish } from "./views/replenish.js";
 import { renderReview } from "./views/review.js";
 import { renderNotes } from "./views/notes.js";
 import { remember, tabHref, origin } from "./nav.js";
@@ -78,6 +79,9 @@ function route() {
   } else if (name === "dict") {
     current = "dict";
     cleanup = renderDict(stage);
+  } else if (name === "replenish") {
+    current = "dict"; // «Пополнить словарь» открывается из словаря, и вкладка «Словарь» остаётся отмеченной
+    cleanup = renderReplenish(stage);
   } else if (name === "review") {
     current = "review";
     cleanup = renderReview(stage);
