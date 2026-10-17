@@ -4,7 +4,7 @@ import { h, icon, openSheet, closeSheet, toast } from "../dom.js";
 import { app, subscribe, setNoteText, removeNote, jumpToNote, folders } from "../store.js";
 import { groupByBook, notesInFolder, noteCounts } from "../notes.js";
 import { ALL, isUserGroup, folderRows, subtreeSet } from "../shelf.js";
-import { pageHash, folderFromHash } from "../nav.js";
+import { pageHash, folderFromHash, lastPage } from "../nav.js";
 import { folderList, backLink, plural } from "./folders.js";
 
 /**
@@ -116,6 +116,7 @@ export function renderNotes(root, arg = "") {
   const head = h("div");
   const list = h("div");
   root.replaceChildren(h("main", { class: "view" }, h("div", { class: "page" }, head, list)));
+  const toBooks = () => ({ href: lastPage.library, label: "Книги" }); // заметки открываются из «Книг» и с главной; стрелка ведёт к книгам
   const notesWord = (n) => `${n} ${plural(n, ["заметка", "заметки", "заметок"])}`;
 
   function row(n) {
@@ -165,7 +166,7 @@ export function renderNotes(root, arg = "") {
     const inFolders = rows.length > 0;
 
     if (!total) {
-      paintHead("Заметки", "", folder ? { href: pageHash("notes"), label: "Заметки" } : null);
+      paintHead("Заметки", "", folder ? { href: pageHash("notes"), label: "Заметки" } : toBooks());
       show(
         h(
           "section",
@@ -180,12 +181,12 @@ export function renderNotes(root, arg = "") {
 
     // Список папок: только если есть папки с заметками
     if (!folder && inFolders) {
-      paintHead("Заметки", notesWord(total));
+      paintHead("Заметки", notesWord(total), toBooks());
       show(folderList({ all: { label: "Все заметки", count: total, href: pageHash("notes", ALL) }, rows, hrefOf: (id) => pageHash("notes", id), onToggle: paint }));
       return;
     }
     if (!folder || folder === ALL) {
-      paintHead(folder ? "Все заметки" : "Заметки", notesWord(total), folder && inFolders ? { href: pageHash("notes"), label: "Заметки" } : null);
+      paintHead(folder ? "Все заметки" : "Заметки", notesWord(total), inFolders && folder ? { href: pageHash("notes"), label: "Заметки" } : toBooks());
       show(byBook(app.notes));
       return;
     }

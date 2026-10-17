@@ -4,6 +4,7 @@ import { lemmaCandidates } from "../lex.js";
 import * as levels from "../levels.js";
 import { capOf, isWritten } from "../modes.js";
 import { leeches } from "../leech.js";
+import { reviewCap, takeToday, normalizeDaily, EXTRA_STEP } from "../pacing.js";
 import { app, emit, today } from "./state.js";
 
 // ── Словарь пользователя ──────────────────────────────────────────────────
@@ -19,8 +20,12 @@ export function resolveWord(raw) {
 
 export const cardFor = (entry) => (entry ? app.cards.get(entry.id) : undefined);
 
-/** Добавляет слово в словарь (или дописывает предложение к имеющемуся). opts.srs — готовый уровень вместо «нового» (js/freqdeck.js). */
-export async function saveCard(entry, ctx, { srs } = {}) {
+/**
+ * Добавляет слово в словарь (или дописывает предложение к имеющемуся). opts.srs — готовый уровень вместо «нового» (js/freqdeck.js).
+ * opts.src и opts.series (только у новой карточки): откуда слово и какой серией «Пополнить словарь» добавлено; по ним работают фильтр
+ * «Из проверки» и кнопка «Убрать всё добавленное этой серией».
+ */
+export async function saveCard(entry, ctx, { srs, src, series } = {}) {
   let c = app.cards.get(entry.id);
   if (!c) {
     c = {
@@ -36,6 +41,8 @@ export async function saveCard(entry, ctx, { srs } = {}) {
       ctx: [],
       srs: srs || levels.newSrs(),
       added: Date.now(),
+      ...(src ? { src } : {}),
+      ...(series ? { series } : {}),
     };
   }
   if (ctx && !c.ctx.some((x) => x.s === ctx.s)) {
@@ -62,6 +69,31 @@ export async function removeCard(id) {
   emit();
 }
 
+/** Убирает несколько слов за один раз (и один раз перерисовывает экран). Возвращает, сколько убрано. */
+export async function removeCards(ids) {
+  const gone = [...new Set(ids)].filter((id) => app.cards.has(id));
+  if (!gone.length) return 0;
+  await db.delMany("cards", gone); // одной записью, как putMany: сотни слов за раз
+  gone.forEach((id) => app.cards.delete(id));
+  emit();
+  return gone.length;
+}
+
+/** Меняет несколько слов сразу: patch — объект полей или функция (карточка → поля). Возвращает, сколько изменено. */
+export async function patchCards(ids, patch) {
+  const changed = [];
+  for (const id of new Set(ids)) {
+    const c = app.cards.get(id);
+    if (!c) continue;
+    changed.push({ ...c, ...(typeof patch === "function" ? patch(c) : patch) });
+  }
+  if (!changed.length) return 0;
+  await db.putMany("cards", changed);
+  for (const c of changed) app.cards.set(c.id, c);
+  emit();
+  return changed.length;
+}
+
 /** Свой перевод вместо словарного. Пустой перевод не сохраняется. Возвращает true, если перевод изменён. */
 export async function setTranslation(id, text) {
   const ru = String(text || "").replace(/\s+/g, " ").trim().slice(0, 200);
@@ -80,21 +112,39 @@ export const setSkip = (id, skip) => updateCard(id, { skip: !!skip });
 /** Сколько сейчас трудных слов (js/leech.js). */
 export const hardCount = () => leeches([...app.cards.values()]).length;
 
+/** Что сегодня уже сделано (js/pacing.js); после 4:00 начинается новый учебный день, и счётчики обнуляются. */
+function todayDaily() {
+  if (app.daily.day !== today()) app.daily = normalizeDaily(null, today());
+  return app.daily;
+}
+
 /**
  * Очередь повторения. scope: 'all' | 'w' | 'pv' | 'id' | 'hard' (трудные слова: все, не только те, что пора повторять).
  * Слова, помеченные «Это имя, не повторять», в очередь не попадают.
+ * За день предлагается не больше reviewsPerDay разных карточек (js/pacing.js): остальные просроченные (те, срок которых
+ * пришёл позже) ждут следующего дня (held). Новые слова ограничены newPerDay отдельно. Возвращает { due, fresh, list, held }.
  */
 export function queue(scope = "all", now = Date.now()) {
   const live = [...app.cards.values()].filter((c) => !c.skip);
   if (scope === "hard") {
     const hard = leeches(live);
-    return { due: hard, fresh: [], list: hard };
+    return { due: hard, fresh: [], list: hard, held: 0 };
   }
   const all = live.filter((c) => scope === "all" || c.t === scope);
-  const due = all.filter((c) => !levels.isNew(c.srs) && c.srs.due <= now).sort((a, b) => a.srs.due - b.srs.due);
-  const left = Math.max(0, app.settings.newPerDay - (app.daily.day === today() ? app.daily.newDone : 0));
+  const overdue = all.filter((c) => !levels.isNew(c.srs) && c.srs.due <= now).sort((a, b) => a.srs.due - b.srs.due);
+  const daily = todayDaily();
+  const { list: due, held } = takeToday(overdue, daily, reviewCap(app.settings));
+  const left = Math.max(0, app.settings.newPerDay - daily.newDone);
   const fresh = all.filter((c) => levels.isNew(c.srs)).sort((a, b) => a.added - b.added).slice(0, left);
-  return { due, fresh, list: [...due, ...fresh] };
+  return { due, fresh, list: [...due, ...fresh], held };
+}
+
+/** «Ещё»: добавить к сегодняшнему лимиту повторений ещё EXTRA_STEP карточек. */
+export async function addReviewExtra() {
+  const d = todayDaily();
+  d.extra += EXTRA_STEP;
+  await db.put("kv", { key: "daily", value: d });
+  emit();
 }
 
 /**
@@ -115,11 +165,18 @@ export async function answerCard(id, result, { task = "", written, now = Date.no
   if (ctxText) c.lastCtx = ctxText;
   await db.put("cards", c);
   await db.add("log", { id, t: now, result, written: wr, task, lv: c.srs.lv, v: levels.LADDER, ...(Number.isFinite(ms) ? { ms: Math.round(ms) } : {}) });
+  // счётчики дня: новое слово не считается в лимит повторений, повторённая в срок карточка считается один раз за день
+  const d = todayDaily();
+  let counted = false;
   if (before === 0) {
-    if (app.daily.day !== today()) app.daily = { day: today(), newDone: 0 };
-    app.daily.newDone += 1;
-    await db.put("kv", { key: "daily", value: app.daily });
+    d.newDone += 1;
+    d.nw.push(id);
+    counted = true;
+  } else if (!early && !d.nw.includes(id) && !d.rev.includes(id)) {
+    d.rev.push(id);
+    counted = true;
   }
+  if (counted) await db.put("kv", { key: "daily", value: d });
   emit();
   return { card: c, before, after: c.srs.lv };
 }

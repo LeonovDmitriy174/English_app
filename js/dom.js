@@ -86,7 +86,7 @@ export function toast(text) {
 // Один лист на экране. Закрывается по тапу на фон, по Escape и свайпом вниз за «ручку».
 let current = null;
 
-export function openSheet({ content, cls = "", label = "", onClose, modeless = false } = {}) {
+export function openSheet({ content, cls = "", label = "", onClose, modeless = false, onSwipeUp } = {}) {
   current?.close(true);
   const scrim = h("div", { class: modeless ? "scrim clear" : "scrim" });
   const grip = h("div", { class: "grip", "aria-hidden": "true" });
@@ -127,14 +127,18 @@ export function openSheet({ content, cls = "", label = "", onClose, modeless = f
   // свайп вниз
   let startY = null;
   let dy = 0;
+  let rise = 0; // насколько палец ушёл вверх (для листов, которые раскрываются свайпом вверх: onSwipeUp)
   grip.addEventListener("touchstart", (e) => {
     startY = e.touches[0].clientY;
     dy = 0;
+    rise = 0;
     el.style.transition = "none";
   }, { passive: true });
   grip.addEventListener("touchmove", (e) => {
     if (startY == null) return;
-    dy = Math.max(0, e.touches[0].clientY - startY);
+    const move = e.touches[0].clientY - startY;
+    rise = Math.max(rise, -move);
+    dy = Math.max(0, move);
     el.style.transform = `translateY(${dy}px)`;
   }, { passive: true });
   grip.addEventListener("touchend", () => {
@@ -143,7 +147,10 @@ export function openSheet({ content, cls = "", label = "", onClose, modeless = f
     startY = null;
     if (dy > 90) api.close();
     else el.style.transform = "";
+    if (onSwipeUp && rise > 36) onSwipeUp();
+    rise = 0;
   });
+  if (onSwipeUp) grip.addEventListener("click", () => onSwipeUp());
 
   current = api;
   return api;

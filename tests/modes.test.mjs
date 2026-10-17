@@ -4,7 +4,7 @@ import { MODES, TASKS, DEFAULT_MIX, MODE_KEYS, normalizeMix, band, capOf, isWrit
 import { newSrs, answer } from "../js/levels.js";
 
 /** Обычное слово: заданий для фраз (частица, идиома) и форм у него нет. */
-const plain = (t) => t !== "phraseChoice" && t !== "formChoice";
+const plain = (t) => t !== "phraseChoice" && t !== "formChoice" && t !== "familyChoice";
 const seeded = (seed = 1) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 /** Какие задания вообще бывают на уровне lv при данных режимах (перебор случайных чисел). */
 const seen = (lv, modes = DEFAULT_MIX, can = plain) => {
@@ -52,11 +52,11 @@ test("лесенка при всех режимах: узнать, выбрат�
 test("фразовому глаголу и идиоме добавляются частица и слово во фразе, глаголу форма слова", () => {
   const all = () => true;
   assert.deepEqual(seen(1, DEFAULT_MIX, all), ["choice", "choiceBack", "listenChoice", "phraseChoice"]);
-  assert.deepEqual(seen(2, DEFAULT_MIX, all), ["choiceBack", "clozeChoice", "formChoice", "listenChoice", "phraseChoice"]);
-  assert.deepEqual(seen(3, DEFAULT_MIX, all), ["cloze", "clozeChoice", "formChoice", "spell"]);
-  assert.deepEqual(seen(5, DEFAULT_MIX, all), ["cloze", "clozeChoice", "formChoice", "spell"]);
+  assert.deepEqual(seen(2, DEFAULT_MIX, all), ["choiceBack", "clozeChoice", "familyChoice", "formChoice", "listenChoice", "phraseChoice"]);
+  assert.deepEqual(seen(3, DEFAULT_MIX, all), ["cloze", "clozeChoice", "familyChoice", "formChoice", "spell"]);
+  assert.deepEqual(seen(5, DEFAULT_MIX, all), ["cloze", "clozeChoice", "familyChoice", "formChoice", "spell"]);
   assert.deepEqual(seen(6, DEFAULT_MIX, all), ["cloze", "listenType", "spell"], "на высоких уровнях по-прежнему вспоминаем сами");
-  assert.deepEqual(seen(2, DEFAULT_MIX, (t) => t !== "formChoice" && t !== "clozeChoice" && t !== "cloze" ? true : false), ["choiceBack", "listenChoice", "phraseChoice"]);
+  assert.deepEqual(seen(2, DEFAULT_MIX, (t) => t !== "formChoice" && t !== "familyChoice" && t !== "clozeChoice" && t !== "cloze" ? true : false), ["choiceBack", "listenChoice", "phraseChoice"]);
 });
 
 test("Диктант: слова с высоким уровнем в режиме «Диктант», в Миксе по выбору", () => {
@@ -114,18 +114,25 @@ test("потолки: выбор до 4 уровня (сутки), выбор в
   assert.equal(capOf("clozeChoice"), 6);
   assert.equal(capOf("phraseChoice"), 4);
   assert.equal(capOf("formChoice"), 6);
+  assert.equal(capOf("familyChoice"), 6);
   for (const t of ["spell", "cloze", "listenType", "dictation"]) assert.equal(capOf(t), Infinity);
   assert.equal(capOf("неизвестное"), Infinity);
 });
 
 test("письменные задания помечены: ошибка в них опускает не ниже второго уровня", () => {
   for (const t of ["spell", "cloze", "listenType", "dictation"]) assert.ok(isWritten(t), t);
-  for (const t of ["choice", "choiceBack", "clozeChoice", "listenChoice", "phraseChoice", "formChoice"]) assert.ok(!isWritten(t), t);
+  for (const t of ["choice", "choiceBack", "clozeChoice", "listenChoice", "phraseChoice", "formChoice", "familyChoice"]) assert.ok(!isWritten(t), t);
 });
 
-test("мягкое задание только одно: в форме слова верных вариантов может быть несколько", () => {
+test("мягких заданий два: в форме слова и в семье слов верных вариантов может быть несколько", () => {
   assert.ok(isLenient("formChoice"));
-  for (const t of Object.keys(TASKS).filter((x) => x !== "formChoice")) assert.ok(!isLenient(t), t);
+  assert.ok(isLenient("familyChoice"));
+  for (const t of Object.keys(TASKS).filter((x) => x !== "formChoice" && x !== "familyChoice")) assert.ok(!isLenient(t), t);
+});
+
+test("семья слов относится к режиму «Слово в предложении», запасное задание у неё выбор слова в предложении", () => {
+  assert.equal(modeOf("familyChoice"), "cloze");
+  assert.equal(FALLBACK.familyChoice, "clozeChoice");
 });
 
 test("лесенка и потолки согласованы: каждое задание ступени может поднять слово", () => {

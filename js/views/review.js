@@ -1,14 +1,14 @@
 // review.js — повторение словаря: стартовый экран, ход одного захода и итог. Сами задания в tasks.js.
 import { h, icon, toast, copyText, openSheet } from "../dom.js";
-import { app, subscribe, queue, hardCount, answerCard, ensureContexts, kindClass } from "../store.js";
+import { app, subscribe, queue, hardCount, answerCard, addReviewExtra, ensureContexts, kindClass } from "../store.js";
 import { newTracker, judgeInSession, requeuePosition } from "../session.js";
 import { MODES, DEFAULT_MIX, pickTask } from "../modes.js";
 import { applyPace } from "../pace.js";
+import { reviewCap, EXTRA_STEP } from "../pacing.js";
 import { leechReport } from "../leech.js";
 import { createTasks } from "./tasks.js";
 import { runPairs } from "./pairs.js";
 import { openDictSettings, modeAvailable, mixModes } from "./dictsettings.js";
-import { openProgress } from "./progress.js";
 
 const plural = (n, f) => {
   const a = n % 10;
@@ -57,7 +57,7 @@ export function renderReview(root) {
     const page = h(
       "div",
       { class: "page" },
-      h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение"), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Прогресс", onClick: () => openProgress() }, icon("chart", 22)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))),
+      h("header", { class: "top" }, h("h1", { class: "title" }, "Повторение"), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))),
     );
 
     if (!app.cards.size) {
@@ -84,7 +84,8 @@ export function renderReview(root) {
         : total
           ? h("p", { class: "lead" }, `К повторению: ${total} ${plural(total, ["карточка", "карточки", "карточек"])}`)
           : h("p", { class: "lead" }, "На сегодня всё"),
-      h("p", { class: "sub" }, isHard ? "Слова, в которых вы ошибались чаще всего. Здесь они повторяются вне очереди." : total ? `${q.due.length} на повторение, ${q.fresh.length} новых` : "Когда слова будут готовы к повторению, на вкладке появится число."),
+      h("p", { class: "sub" }, isHard ? "Слова, в которых вы ошибались чаще всего. Здесь они повторяются вне очереди." : total ? `${q.due.length} на повторение, ${q.fresh.length} новых` : q.held ? "Дневной лимит повторений выполнен." : "Когда слова будут готовы к повторению, на вкладке появится число."),
+      !isHard && q.held > 0 && h("p", { class: "note tight rv-held" }, `Ещё ${q.held} ${plural(q.held, ["карточка подождёт", "карточки подождут", "карточек подождут"])} до завтра: за день предлагается не больше ${reviewCap(app.settings)}. Ничего не пропадает, лимит меняется в настройках словаря.`),
       h(
         "div",
         { class: "modes", role: "radiogroup", "aria-label": "Режим" },
@@ -134,6 +135,7 @@ export function renderReview(root) {
         "div",
         { class: "start-extra" },
         total >= 3 && !loading && h("button", { class: "linkbtn", onClick: warmUp }, "Разминка: пары"),
+        !isHard && q.held > 0 && h("button", { class: "linkbtn", onClick: () => addReviewExtra() }, `Взять ещё ${Math.min(EXTRA_STEP, q.held)}`),
         isHard && h("button", { class: "linkbtn", onClick: copyHard }, "Скопировать трудные слова"),
       ),
     );

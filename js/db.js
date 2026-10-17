@@ -40,6 +40,7 @@ export const db = {
   /** Много записей одной транзакцией: на телефоне в десятки раз быстрее, чем по одной, и либо всё записалось, либо ничего. */
   putMany: (store, values) => run(store, "readwrite", (s) => void values.forEach((v) => s.put(v))),
   addMany: (store, values) => run(store, "readwrite", (s) => void values.forEach((v) => s.add(v))),
+  delMany: (store, keys) => run(store, "readwrite", (s) => void keys.forEach((k) => s.delete(k))),
   del: (store, key) => run(store, "readwrite", (s) => s.delete(key)),
   clear: (store) => run(store, "readwrite", (s) => s.clear()),
 };

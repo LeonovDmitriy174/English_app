@@ -12,6 +12,8 @@ import { applySettings } from "./store/settings.js";
 import { ensureAnalysis } from "./store/books.js";
 import { ensureContexts } from "./store/contexts.js";
 import { normalizeActivity } from "./activity.js";
+import { normalizeDaily } from "./pacing.js";
+import { normalizeChars } from "./characters.js";
 
 export * from "./store/state.js";
 export * from "./store/lexicon.js";
@@ -22,6 +24,7 @@ export * from "./store/books.js";
 export * from "./store/folders.js";
 export * from "./store/catalog.js";
 export * from "./store/notes.js";
+export * from "./store/chars.js";
 export * from "./store/data.js";
 export * from "./store/activity.js";
 export * from "./store/replenish.js";
@@ -33,10 +36,11 @@ onDictionaryRetried(() => ensureAnalysis().then(() => ensureContexts()));
 // Приложение открывается, не дожидаясь общего словаря: он большой (до десятков мегабайт), и его разбор занимает от долей секунды
 // до пары секунд. Экран с книгами и повторением в словаре не нуждается, а читалка, анализ и задания ждут его (dictionaryReady).
 export async function init() {
-  const [cards, books, kvSettings, kvDaily, kvNotes, kvGroups, kvCatalog, kvBackup, kvKnown, kvActivity] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily"), db.get("kv", "notes"), db.get("kv", "groups"), db.get("kv", "catalog"), db.get("kv", "backup"), db.get("kv", "known"), db.get("kv", "activity")]);
+  const [cards, books, kvSettings, kvDaily, kvNotes, kvGroups, kvCatalog, kvBackup, kvKnown, kvActivity, kvChars] = await Promise.all([db.all("cards"), db.all("books"), db.get("kv", "settings"), db.get("kv", "daily"), db.get("kv", "notes"), db.get("kv", "groups"), db.get("kv", "catalog"), db.get("kv", "backup"), db.get("kv", "known"), db.get("kv", "activity"), db.get("kv", "chars")]);
   app.notes = Array.isArray(kvNotes?.value) ? kvNotes.value : [];
   app.known = new Set(Array.isArray(kvKnown?.value) ? kvKnown.value.filter((id) => typeof id === "string") : []);
   app.activity = normalizeActivity(kvActivity?.value);
+  app.chars = normalizeChars(kvChars?.value);
   app.groups = (Array.isArray(kvGroups?.value) ? kvGroups.value : []).filter((g) => isUserGroup(g?.id) && cleanName(g.name));
   if (kvCatalog?.value) {
     app.catalog = sanitizeCatalog(kvCatalog.value);
@@ -62,7 +66,6 @@ export async function init() {
   app.books = books.sort((a, b) => (b.opened || b.added) - (a.opened || a.added));
   Object.assign(app.settings, kvSettings?.value || {});
   app.settings.mixModes = normalizeMix(app.settings.mixModes);
-  if (kvDaily?.value?.day === today()) app.daily = kvDaily.value;
-  else app.daily = { day: today(), newDone: 0 };
+  app.daily = normalizeDaily(kvDaily?.value, today());
   applySettings();
 }

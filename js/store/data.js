@@ -15,6 +15,8 @@ import { persistGroups } from "./folders.js";
 import { persistNotes } from "./notes.js";
 import { setActivity } from "./activity.js";
 import { exportReplenish, importReplenish } from "./replenish.js";
+import { replaceChars } from "./chars.js";
+import { charsToList, normalizeChars, mergeChars } from "../characters.js";
 
 const BACKUP_TAG = "ember-chronicle-backup"; // не менять: по нему опознаются файлы копий
 
@@ -62,7 +64,7 @@ export async function diagnosticsReport() {
     standalone,
     userAgent: navigator.userAgent,
     storage: { usage, quota, persisted },
-    counts: { cards: app.cards.size, notes: app.notes.length, books: app.books.length, log },
+    counts: { cards: app.cards.size, notes: app.notes.length, chars: app.chars.size, books: app.books.length, log },
     dict: app.dict,
     backupAt: app.backup.at,
     offline: !!navigator.serviceWorker?.controller,
@@ -82,6 +84,7 @@ export async function exportData() {
       notes: app.notes,
       groups: app.groups,
       known: [...app.known],
+      chars: charsToList(app.chars),
       activity: app.activity,
       freq: await exportReplenish(),
       log,
@@ -142,6 +145,10 @@ export async function importData(text) {
   if (data.activity) {
     const merged = mergeActivity(app.activity, data.activity);
     if (merged.changed) await setActivity(merged.activity);
+  }
+  if (Array.isArray(data.chars) && data.chars.length) {
+    const merged = mergeChars(app.chars, normalizeChars(data.chars)); // заметки к именам: чего на устройстве нет — добавляется, своя заметка сильнее файловой
+    if (merged.changed) await replaceChars(merged.map);
   }
   if (data.freq) await importReplenish(data.freq); // «Пополнить словарь»: где остановились, сданные тесты, свой список слов
   if (Array.isArray(data.known)) {

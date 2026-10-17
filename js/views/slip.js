@@ -1,6 +1,7 @@
 // slip.js — карточка слова («листок картотеки»): перевод, определение, цитата из книги, пример.
 import { h, icon, openSheet, toast } from "../dom.js";
-import { cardFor, saveCard, removeCard, setTranslation, setMnemonic, setSkip, posLabel, kindClass } from "../store.js";
+import { cardFor, saveCard, removeCard, setTranslation, setMnemonic, setSkip, setChar, posLabel, kindClass } from "../store.js";
+import { MAX_TEXT } from "../characters.js";
 import { speak, canSpeak } from "../tts.js";
 
 /**
@@ -12,17 +13,31 @@ import { speak, canSpeak } from "../tts.js";
  *   note     — { label, run } ссылка на заметку к этому месту книги (только в читалке)
  *   onChange — вызывается после добавления/удаления
  *   onClose
+ *   proper   — слово похоже на имя или название; charKey — ключ заметки о нём; term — { key, name, text, own } заметка о персонаже или термин
+ *   compact  — короткая карточка (читалка): слово, перевод и «+» одной строкой; полная открывается кнопкой «Подробнее» или свайпом вверх
  */
 export function openSlip(opts) {
   let o = opts;
   let editing = null; // что сейчас правится у слова из словаря: "ru" (перевод) или "mnemonic" (ассоциация)
+  let asWord = false; // у имени: открыта форма «добавить в словарь как слово» вместо заметки о персонаже
+  let expanded = false; // у короткой карточки: открыты ли подробности (остаётся открытым, пока вы нажимаете на другие слова)
+  const isCompact = () => !!o.compact && !expanded;
+  const klass = () => `${cat(o)}${isCompact() ? " compact" : ""}`;
   const sheet = openSheet({
     content: build(),
-    cls: `slip ${cat(o)}`,
+    cls: `slip ${klass()}`,
     label: "Карточка слова",
     modeless: !!o.modeless,
     onClose: () => o.onClose?.(),
+    onSwipeUp: o.compact ? () => expand() : undefined,
   });
+
+  /** Короткая карточка → полная. */
+  function expand() {
+    if (!isCompact()) return;
+    expanded = true;
+    refresh();
+  }
 
   function cat(x) {
     return x.entry ? kindClass(x.entry.t) : "k-x";
@@ -30,7 +45,7 @@ export function openSlip(opts) {
 
   function refresh() {
     editing = null;
-    sheet.el.className = `sheet slip open ${cat(o)}`;
+    sheet.el.className = `sheet slip open ${klass()}`;
     sheet.setContent(build());
     sheet.body.scrollTop = 0;
   }
@@ -100,7 +115,193 @@ export function openSlip(opts) {
     ];
   }
 
+  // ── короткая карточка ───────────────────────────────────────────────────
+  function speaker(word) {
+    return canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(word) }, icon("speaker", 24));
+  }
+
+  /** Свайп вверх по короткой карточке раскрывает её (у ручки то же самое делает сам лист). */
+  function swipeUpToExpand(node) {
+    let y0 = null;
+    node.addEventListener("touchstart", (e) => (y0 = e.touches[0].clientY), { passive: true });
+    node.addEventListener("touchend", (e) => {
+      if (y0 != null && y0 - e.changedTouches[0].clientY > 36) expand();
+      y0 = null;
+    });
+    return node;
+  }
+
+  function compactEntry() {
+    const { entry, surface, ctx, alt } = o;
+    const saved = cardFor(entry);
+    const shown = (surface || "").toLowerCase();
+    const differs = shown && shown !== entry.w;
+    const tr = saved?.edited ? { ru: saved.ru, rm: "" } : entry;
+    const add = saved
+      ? h("span", { class: "cs-state", role: "img", "aria-label": "В словаре" }, icon("check", 22))
+      : h(
+          "button",
+          {
+            class: "cs-add",
+            "aria-label": "Добавить в словарь",
+            onClick: async () => {
+              await saveCard(entry, ctx);
+              toast("Добавлено в словарь");
+              o.onChange?.();
+              refresh();
+            },
+          },
+          icon("plus", 24),
+        );
+    return swipeUpToExpand(
+      h(
+        "div",
+        { class: "cs" },
+        h(
+          "div",
+          { class: "cs-row" },
+          h(
+            "div",
+            { class: "cs-main" },
+            h("div", { class: "cs-top" }, h("h2", { class: "hw sm" }, entry.w), h("span", { class: "meta" }, posLabel(entry))),
+            tr.ru ? h("p", { class: "ru sm" }, tr.ru) : tr.rm ? h("p", { class: "ru auto sm" }, tr.rm) : entry.en ? h("p", { class: "def sm" }, entry.en) : h("p", { class: "note tight" }, "Перевода пока нет."),
+            differs && h("p", { class: "meta via" }, `в тексте: ${shown}`),
+          ),
+          h("div", { class: "cs-act" }, speaker(entry.w), add),
+        ),
+        h("div", { class: "cs-links" }, h("button", { class: "linkbtn", onClick: expand }, "Подробнее"), alt && h("button", { class: "linkbtn", onClick: alt.run }, alt.label)),
+      ),
+    );
+  }
+
+  function compactUnknown() {
+    const { surface, ctx, alt } = o;
+    const bare = (surface || "").replace(/['’]s$/, "");
+    const word = o.proper ? bare : bare.toLowerCase();
+    if (o.proper) {
+      return swipeUpToExpand(
+        h(
+          "div",
+          { class: "cs" },
+          h("div", { class: "cs-row" }, h("div", { class: "cs-main" }, h("div", { class: "cs-top" }, h("h2", { class: "hw sm" }, word), h("span", { class: "meta" }, "имя или название"))), h("div", { class: "cs-act" }, speaker(word))),
+          h("div", { class: "cs-links" }, h("button", { class: "linkbtn", onClick: expand }, "Подробнее"), alt && h("button", { class: "linkbtn", onClick: alt.run }, alt.label)),
+        ),
+      );
+    }
+    const input = h("input", { class: "field cs-field", type: "text", placeholder: "Свой перевод", autocomplete: "off", autocapitalize: "off", "aria-label": "Перевод слова", enterkeyhint: "done" });
+    const add = h("button", { class: "cs-add", "aria-label": "Добавить в словарь", disabled: true, onClick: save }, icon("plus", 24));
+    input.addEventListener("input", () => (add.disabled = !input.value.trim()));
+    input.addEventListener("keydown", (e) => e.key === "Enter" && input.value.trim() && save());
+    async function save() {
+      const entry = { id: `w:${word.toLowerCase()}`, t: "w", w: word, pos: "", ru: input.value.trim(), en: "", ex: "", custom: true };
+      await saveCard(entry, ctx);
+      toast("Добавлено в словарь");
+      o.onChange?.();
+      o.entry = entry;
+      refresh();
+    }
+    return swipeUpToExpand(
+      h(
+        "div",
+        { class: "cs" },
+        h("div", { class: "cs-row" }, h("div", { class: "cs-main" }, h("div", { class: "cs-top" }, h("h2", { class: "hw sm" }, word), h("span", { class: "meta" }, "нет в словаре"))), h("div", { class: "cs-act" }, speaker(word))),
+        h("div", { class: "cs-row cs-form" }, input, add),
+        h("div", { class: "cs-links" }, h("button", { class: "linkbtn", onClick: expand }, "Подробнее"), alt && h("button", { class: "linkbtn", onClick: alt.run }, alt.label)),
+      ),
+    );
+  }
+
+  // ── имена и термины: заметка о персонаже ───────────────────────────────
+  function charName() {
+    return o.term?.name || (o.surface || "").replace(/['’]s$/, "");
+  }
+
+  /** Открывает полную карточку сразу с полем заметки (из короткой карточки: «Добавить заметку»). */
+  function openCharEditor() {
+    expanded = true;
+    editing = "char";
+    sheet.el.className = `sheet slip open ${klass()}`;
+    sheet.setContent(build());
+    sheet.body.scrollTop = 0;
+  }
+
+  async function saveChar(text) {
+    const next = String(text || "").trim();
+    const key = await setChar(o.charKey, { name: charName(), text: next });
+    if (!key) {
+      toast("Не удалось сохранить заметку");
+      return;
+    }
+    if (next) {
+      o.term = { key, name: charName(), text: next.replace(/\s+/g, " ").slice(0, MAX_TEXT), own: true };
+      toast("Заметка сохранена");
+    } else {
+      o.term = null;
+      toast("Заметка удалена");
+    }
+    o.onChange?.(); // читалка заново ищет места с заметками и подчёркивает их
+    editing = null;
+    refresh();
+  }
+
+  function charEditor() {
+    const area = h("textarea", { class: "field note-text", rows: 3, maxlength: MAX_TEXT, placeholder: "Кто это или что это: одна-две фразы", "aria-label": `Заметка: ${charName()}`, enterkeyhint: "enter" }, o.term?.text || "");
+    setTimeout(() => area.focus(), 60);
+    return h(
+      "div",
+      null,
+      area,
+      h(
+        "div",
+        { class: "slip-actions" },
+        h("button", { class: "btn primary grow", onClick: () => saveChar(area.value) }, "Сохранить"),
+        h("button", { class: "btn quiet", onClick: () => ((editing = null), rebuild()) }, "Отмена"),
+      ),
+      o.term ? h("div", null, h("button", { class: "linkbtn danger-link", onClick: () => saveChar("") }, "Удалить заметку")) : null,
+    );
+  }
+
+  function compactChar() {
+    const { alt } = o;
+    const name = charName();
+    return swipeUpToExpand(
+      h(
+        "div",
+        { class: "cs" },
+        h(
+          "div",
+          { class: "cs-row" },
+          h("div", { class: "cs-main" }, h("div", { class: "cs-top" }, h("h2", { class: "hw sm" }, name), h("span", { class: "meta" }, o.term ? "персонаж или название" : "имя или название")), o.term ? h("p", { class: "ru sm char-text" }, o.term.text) : null),
+          h("div", { class: "cs-act" }, speaker(name)),
+        ),
+        h("div", { class: "cs-links" }, h("button", { class: "linkbtn", onClick: expand }, "Подробнее"), o.term ? null : h("button", { class: "linkbtn", onClick: openCharEditor }, "Добавить заметку"), alt && h("button", { class: "linkbtn", onClick: alt.run }, alt.label)),
+      ),
+    );
+  }
+
+  function charCard() {
+    const { ctx, alt } = o;
+    const name = charName();
+    const root = h(
+      "div",
+      null,
+      h("div", { class: "slip-head" }, h("div", null, h("h2", { class: "hw" }, name), h("p", { class: "meta" }, o.term ? "персонаж или название" : "имя или название")), canSpeak() && h("button", { class: "iconbtn speak", "aria-label": "Произнести", onClick: () => speak(name) }, icon("speaker", 24))),
+      editing === "char" ? null : o.term ? h("p", { class: "ru char-text" }, o.term.text) : h("p", { class: "note" }, "Похоже на имя или название: перевод обычно не нужен. Запишите, кто это: заметка появится при нажатии на имя в любой книге."),
+      editing === "char" ? charEditor() : null,
+      quote(ctx),
+      editing === "char"
+        ? null
+        : h("div", { class: "slip-actions" }, h("button", { class: "btn primary grow", onClick: () => ((editing = "char"), rebuild()) }, o.term ? "Править заметку" : "Добавить заметку")),
+    );
+    const more = [alt && h("button", { class: "linkbtn", onClick: alt.run }, alt.label), !o.term && editing !== "char" && h("button", { class: "linkbtn", onClick: () => ((asWord = true), refresh()) }, "Добавить в словарь как слово")].filter(Boolean);
+    if (more.length) root.append(h("div", null, ...more));
+    noteLink(root);
+    return root;
+  }
+
   function build() {
+    if (!o.entry && (o.proper || o.term) && !asWord) return isCompact() ? compactChar() : charCard();
+    if (isCompact()) return o.entry ? compactEntry() : compactUnknown();
     const { entry, surface, ctx, alt } = o;
     const saved = cardFor(entry);
     if (!entry) return unknown();
@@ -238,6 +439,7 @@ export function openSlip(opts) {
     close: () => sheet.close(),
     update(next) {
       o = next;
+      asWord = false;
       refresh();
     },
   };

@@ -7,6 +7,7 @@
 //                         choiceBack      перевод → выбрать английское слово
 //   Слово в предложении   clozeChoice     предложение с пропуском → выбрать слово
 //                         formChoice      предложение с пропуском → выбрать форму слова (grew, grown)
+//                         familyChoice    предложение с пропуском → выбрать слово из семьи (growth, grow, grower)
 //                         phraseChoice    фраза с пропуском → выбрать частицу (give ___) или слово идиомы
 //                         cloze           предложение с пропуском → вписать слово
 //   Написание             spell           перевод или определение → написать слово
@@ -21,12 +22,12 @@
 //   уровень слова   задания
 //   0 (новое)       choice
 //   1               choice, choiceBack, listenChoice, phraseChoice
-//   2               choiceBack, listenChoice, phraseChoice, clozeChoice, formChoice
-//   3–5             clozeChoice, formChoice, spell, cloze
+//   2               choiceBack, listenChoice, phraseChoice, clozeChoice, formChoice, familyChoice
+//   3–5             clozeChoice, formChoice, familyChoice, spell, cloze
 //   6 и выше        spell, cloze, listenType, dictation
 //
 // phraseChoice бывает только у фразовых глаголов и идиом, formChoice только у глаголов и прилагательных, у которых
-// можно построить формы; у остальных слов этих заданий просто нет.
+// можно построить формы, familyChoice только у слов из списка семей (js/familydata.js); у остальных слов этих заданий просто нет.
 //
 // Что в какой «ступени» — задаёт ранг задания (rank): 1 самое лёгкое, 5 самое трудное. Ступень уровня — это
 // диапазон рангов (band). Из включённых режимов берутся задания своей ступени; если таких нет, то ближайшие.
@@ -34,14 +35,15 @@
 // Потолок (cap): задания с выбором из вариантов поднимают слово не выше своего потолка. Угадать верный вариант
 // из четырёх можно и не зная слова, поэтому выше 4 уровня (сутки между повторами) слово растёт только
 // от заданий, где его нужно вспомнить самому: написать, вписать в предложение, написать на слух.
-// Выбор в предложении (clozeChoice, formChoice) труднее простого выбора и доводит слово до 6 уровня (три дня).
+// Выбор в предложении (clozeChoice, formChoice, familyChoice) труднее простого выбора и доводит слово до 6 уровня (три дня).
 //
-// «Мягкие» задания (LENIENT): у них возможен не один верный вариант (в предложении подошли бы и grew, и grows),
+// «Мягкие» задания (LENIENT): у них возможен не один верный вариант (в предложении подошли бы и grew, и grows; к месту
+// подошли бы и «stone wall», и «stony wall»),
 // поэтому неверный выбор в них засчитывается как «почти» и уровень не сбрасывает; сбрасывает только явное «Не знаю».
 
 export const MODES = [
   { key: "choice", name: "Выбор", short: "Слово и четыре варианта", desc: "Слово и четыре варианта: перевод, а на средних уровнях наоборот", tasks: ["choice", "choiceBack"] },
-  { key: "cloze", name: "Слово в предложении", short: "Пропуск в предложении из книги", desc: "Выбрать или вписать слово, его форму или частицу в предложение из книги", tasks: ["clozeChoice", "formChoice", "phraseChoice", "cloze"] },
+  { key: "cloze", name: "Слово в предложении", short: "Пропуск в предложении из книги", desc: "Выбрать или вписать слово, его форму, слово из той же семьи или частицу в предложение из книги", tasks: ["clozeChoice", "formChoice", "familyChoice", "phraseChoice", "cloze"] },
   { key: "spell", name: "Написание", short: "Перевод на экране, слово пишете сами", desc: "Видите перевод или определение и пишете слово", tasks: ["spell"] },
   { key: "listen", name: "Слух", short: "Слушаете слово и отвечаете", desc: "Слушаете слово и выбираете перевод или пишете его", tasks: ["listenChoice", "listenType"] },
   { key: "dictation", name: "Диктант", short: "Слушаете предложение и записываете", desc: "Слушаете предложение из книги и записываете его целиком", tasks: ["dictation"], optIn: true },
@@ -54,6 +56,7 @@ export const TASKS = {
   phraseChoice: { rank: 2, cap: 4, written: false },
   clozeChoice: { rank: 3, cap: 6, written: false },
   formChoice: { rank: 3, cap: 6, written: false },
+  familyChoice: { rank: 3, cap: 6, written: false },
   spell: { rank: 4, cap: Infinity, written: true },
   cloze: { rank: 4, cap: Infinity, written: true },
   listenType: { rank: 5, cap: Infinity, written: true },
@@ -61,7 +64,7 @@ export const TASKS = {
 };
 
 /** Задания, где верных вариантов может быть несколько: ошибка в них не сбрасывает уровень. */
-export const LENIENT = new Set(["formChoice"]);
+export const LENIENT = new Set(["formChoice", "familyChoice"]);
 export const isLenient = (task) => LENIENT.has(task);
 
 export const MODE_KEYS = new Set(MODES.map((m) => m.key));
@@ -117,6 +120,7 @@ export const FALLBACK = {
   listenChoice: "choice",
   phraseChoice: "choice",
   formChoice: "clozeChoice",
+  familyChoice: "clozeChoice",
   choice: "spell",
   cloze: "spell",
   listenType: "spell",

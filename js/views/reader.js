@@ -7,10 +7,13 @@ import { noteAt, notesIn, findAnchor } from "../notes.js";
 import { openNoteSheet } from "./notes.js";
 import { lastPage, backFromReader } from "../nav.js";
 import { chapterBlocks, prettyTitle } from "../epub.js";
+import { NOT_NAMES } from "../analysis.js";
 import { tokenize, findPhrases, sentenceAt } from "../lex.js";
 import { openSlip } from "./slip.js";
 import { openReaderSettings } from "./settings.js";
 import { speak } from "../tts.js";
+import { chapterCoverage, pct } from "../coverage.js";
+import { matchTerms, keyOfSurface, displayName } from "../characters.js";
 
 /** Оборачивает слова абзаца в <span class="w"> и возвращает данные для разбора. */
 function wrapParagraph(p) {
@@ -58,9 +61,17 @@ function analyze(d, names) {
   d.tokens.forEach((t, i) => {
     if (d.info[i].ph != null) return;
     // Harry, Hogwarts: слово, которое в книге всегда пишется с заглавной, считаем именем, а не словарным словом
-    if (names.has(t.surf) && t.raw !== t.raw.toLowerCase()) d.info[i].proper = true;
+    if (names.has(t.surf) && !NOT_NAMES.has(t.surf) && t.raw !== t.raw.toLowerCase()) d.info[i].proper = true;
     else d.info[i].entry = resolveWord(t.raw);
   });
+  findTerms(d);
+}
+
+/** Места абзаца, к которым у вас есть заметка о персонаже или термин из файла (js/characters.js). */
+function findTerms(d) {
+  d.info.forEach((inf) => (inf.term = null));
+  d.terms = matchTerms(d.tokens, app.chars, d.ptext);
+  d.terms.forEach((m, k) => m.idxs.forEach((i) => (d.info[i].term = k)));
 }
 
 export function renderReader(root, bookId) {
@@ -89,6 +100,7 @@ export function renderReader(root, bookId) {
 
   const text = h("article", { class: "text", lang: "en" });
   const chnav = h("div", { class: "chnav" });
+  const chcov = h("p", { class: "chcov", hidden: true }); // «Вы знаете около 58% слов этой главы»
   const rprog = h("div", { class: "rprog" });
   const titleBtn = h("button", { class: "rtitle", "aria-label": "Оглавление", onClick: openChapters });
   const bar = h(
@@ -100,7 +112,7 @@ export function renderReader(root, bookId) {
     h("button", { class: "iconbtn aa", "aria-label": "Настройки чтения", onClick: () => openReaderSettings() }, "Aa"),
     rprog,
   );
-  const view = h("main", { class: "view no-tabs reader" }, bar, text, chnav);
+  const view = h("main", { class: "view no-tabs reader" }, bar, text, chcov, chnav);
   root.replaceChildren(view);
 
   // ── метки в тексте ──────────────────────────────────────────────────────
@@ -112,6 +124,7 @@ export function renderReader(root, bookId) {
         if (!sp) return;
         const inf = d.info[i];
         let cls = "w";
+        if (inf.term != null) cls += " term";
         if (inf.ph != null) {
           const m = d.phrases[inf.ph];
           cls += ` ph ${kindClass(m.entry.t)}${cardFor(m.entry) ? " saved" : ""}`;
@@ -132,11 +145,13 @@ export function renderReader(root, bookId) {
   function openAt(d, i, onlyWord = false) {
     const tok = d.tokens[i];
     const inf = d.info[i];
-    const phrase = !onlyWord && inf.ph != null ? d.phrases[inf.ph] : null;
+    // термин или имя с вашей заметкой: показываем её; «Только слово» открывает обычную карточку слова
+    const term = !onlyWord && inf.term != null ? d.terms[inf.term] : null;
+    const phrase = !onlyWord && !term && inf.ph != null ? d.phrases[inf.ph] : null;
     const partOfPhrase = inf.ph != null ? d.phrases[inf.ph] : null;
-    const proper = !phrase && inf.proper;
+    const proper = !phrase && (inf.proper || !!term);
     const entry = phrase ? phrase.entry : proper ? null : inf.entry ?? resolveWord(tok.raw);
-    const idxs = phrase ? phrase.idxs : [i];
+    const idxs = term ? term.idxs : phrase ? phrase.idxs : [i];
     const first = d.tokens[idxs[0]];
     const last = d.tokens[idxs[idxs.length - 1]];
     const [s, e] = sentenceAt(d.ptext, first.start);
@@ -150,7 +165,8 @@ export function renderReader(root, bookId) {
       ch: prettyTitle(book.chapters[chIdx].title),
     };
     let alt = null;
-    if (phrase) alt = { label: `Только слово: ${tok.raw.toLowerCase()}`, run: () => openAt(d, i, true) };
+    if (term) alt = { label: `Только слово: ${tok.raw.toLowerCase()}`, run: () => openAt(d, i, true) };
+    else if (phrase) alt = { label: `Только слово: ${tok.raw.toLowerCase()}`, run: () => openAt(d, i, true) };
     else if (partOfPhrase) alt = { label: `Вернуться к фразе: ${partOfPhrase.entry.w}`, run: () => openAt(d, i, false) };
 
     clearSelection();
@@ -165,15 +181,25 @@ export function renderReader(root, bookId) {
         openNoteAt(k, sentence);
       },
     };
+    const surface = d.ptext.slice(first.start, last.end);
+    // заметка о персонаже: ключ — имя или термин (для имени без заметки ключ нужен, чтобы её можно было добавить)
+    const charKey = term ? term.key : proper ? keyOfSurface(surface) : "";
+    const rec = charKey ? app.chars.get(charKey) : null;
     const opts = {
       entry,
       proper,
-      surface: d.ptext.slice(first.start, last.end),
+      surface,
+      charKey,
+      term: rec ? { key: charKey, name: displayName(charKey, rec), text: rec.t, own: !!rec.o } : null,
       ctx,
       alt,
       note,
       modeless: true,
-      onChange: mark,
+      compact: app.settings.slipCompact !== false,
+      onChange: () => {
+        for (const p of paras) findTerms(p); // заметку добавили, поправили или убрали: места с терминами меняются
+        mark();
+      },
       onClose: () => {
         clearSelection();
         slip = null;
@@ -275,6 +301,7 @@ export function renderReader(root, bookId) {
     titleBtn.textContent = prettyTitle(ch.title);
     text.replaceChildren(h("p", { class: "loading" }, "Открываю главу…"));
     chnav.replaceChildren();
+    chcov.hidden = true;
     let blocks;
     try {
       const zip = await bookZip(book.id);
@@ -306,6 +333,7 @@ export function renderReader(root, bookId) {
     mark();
     renderFlags();
     buildNav();
+    paintCoverage();
     view.scrollTop = 0;
     lastY = 0;
     bar.classList.remove("hide");
@@ -329,6 +357,21 @@ export function renderReader(root, bookId) {
     } else pulse(flash);
     saveProgress(book.id, idx, target);
     onScroll();
+  }
+
+  /** Охват главы: какую долю её слов (без имён) вы знаете. Считается по уже разобранным абзацам, без дополнительной работы. */
+  function paintCoverage() {
+    const ids = [];
+    for (const d of paras) {
+      d.tokens.forEach((t, i) => {
+        if (d.info[i].proper) return;
+        ids.push(d.info[i].entry?.id || app.glossary.lookupWord(t.raw)?.id || "");
+      });
+    }
+    if (ids.length < 40 || !app.glossary?.list?.length) return;
+    const c = chapterCoverage(ids, app.glossary, { cards: app.cards, known: app.known });
+    chcov.textContent = `Вы знаете около ${pct(c.share)} слов этой главы`;
+    chcov.hidden = false;
   }
 
   function buildNav() {

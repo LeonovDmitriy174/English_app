@@ -208,7 +208,7 @@ test("слово, добавленное верным ответом: шесто
   const now = new Date(2026, 9, 17, 13, 0).getTime();
   const days = new Set();
   for (let seed = 1; seed <= 60; seed++) {
-    const s = addedSrs(now, 6, () => (seed * 0.6180339887) % 1);
+    const s = addedSrs(now, 6, { rng: () => (seed * 0.6180339887) % 1 });
     assert.equal(s.lv, 6);
     assert.equal(s.v, 2);
     assert.equal(s.reps, 1);
@@ -218,10 +218,10 @@ test("слово, добавленное верным ответом: шесто
     days.add(studyDay(s.due));
   }
   assert.equal(days.size, 3, "слова разошлись на три разных дня");
-  const slow = addedSrs(now, 4, () => 0.99);
+  const slow = addedSrs(now, 4, { rng: () => 0.99 });
   assert.equal(slow.lv, 4);
   assert.equal(slow.due, dueInDays(now, 2));
-  assert.equal(addedSrs(now, 4, () => 0).due, dueInDays(now, 1));
+  assert.equal(addedSrs(now, 4, { rng: () => 0 }).due, dueInDays(now, 1));
 });
 
 test("состояние: мусор в хранилище не ломает, номер слова не идёт назад", () => {

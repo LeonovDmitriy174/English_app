@@ -10,9 +10,13 @@ const OPENERS = /[\s"“”„«»'‘’()[\]—–-]/;
 const SENTENCE_END = /[.!?…:]/;
 /** Сколько самых частых слов и фраз книги запоминается в разборе. */
 export const TOP_ENTRIES = 500;
+/** Сколько разных слов книги с их частотами запоминается для расчёта охвата (js/coverage.js): хватает с запасом на самые длинные книги. */
+export const FREQ_ENTRIES = 15000;
+/** Сколько самых частых имён и названий книги запоминается с числом упоминаний. */
+export const NAME_ENTRIES = 600;
 
 /** Версия разбора: растёт, когда в разбор добавляется что-то новое. Книги, разобранные раньше, разбираются заново. */
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 /** Подпись разбора: словарь и версия разбора. Когда она меняется, книги разбираются заново. */
 export const statsSignature = (glossary) => `v${ANALYSIS_VERSION}.${dictSignature(glossary)}`;
@@ -36,6 +40,9 @@ export function isMidSentence(text, start) {
   return !SENTENCE_END.test(text[i]);
 }
 
+/** Слова, которые пишутся с заглавной всегда, но именами не являются: «I» и его сокращения. */
+export const NOT_NAMES = new Set(["i", "i'm", "i'll", "i've", "i'd", "i’m", "i’ll", "i’ve", "i’d"]);
+
 const isCapitalized = (raw) => raw[0] !== raw[0].toLowerCase() && raw.slice(1) === raw.slice(1).toLowerCase();
 const isLower = (raw) => raw === raw.toLowerCase();
 
@@ -54,12 +61,14 @@ export function addText(acc, text, glossary) {
   toks.forEach((t, i) => {
     acc.tokens += 1;
     const inside = inPhrase.has(i);
-    const entry = inside ? null : glossary.lookupWord(t.raw);
+    const word = glossary.lookupWord(t.raw); // и внутри фразы: для охвата важно, какое слово стоит в тексте
+    const entry = inside ? null : word;
     const known = inside || !!entry;
     if (known) acc.covered += 1;
     let rec = acc.surf.get(t.surf);
-    if (!rec) acc.surf.set(t.surf, (rec = { n: 0, cov: 0, caps: 0, low: 0, free: 0, id: "" }));
+    if (!rec) acc.surf.set(t.surf, (rec = { n: 0, cov: 0, caps: 0, low: 0, free: 0, id: "", occ: "" }));
     rec.n += 1;
+    if (word) rec.occ = word.id;
     if (entry) {
       rec.free += 1; // слово само по себе, не часть фразы
       rec.id = entry.id;
@@ -75,14 +84,18 @@ export function summarize(acc, glossary) {
   const { surf, phrases, tokens, covered } = acc;
   // Имя собственное: слово встречается с заглавной буквы внутри предложения и ни разу строчными
   const names = [];
+  const nameN = []; // [имя, сколько раз встретилось]: список «Персонажи и названия» (js/views/characters.js)
   let nameTokens = 0;
   let nameCovered = 0;
   const unknown = [];
   const counts = new Map(); // запись словаря -> сколько раз встретилась (слова без имён, фразы отдельно)
+  const occ = new Map(); // слово словаря -> сколько раз стоит в тексте (и внутри фраз), без имён: по нему считается охват
+  let outside = 0; // слов текста (без имён), которых нет в словаре
   let uniqueUnknown = 0;
   for (const [w, r] of surf) {
-    if (r.caps > 0 && r.low === 0) {
+    if (r.caps > 0 && r.low === 0 && !NOT_NAMES.has(w)) {
       names.push(w);
+      nameN.push([w, r.n]);
       nameTokens += r.n;
       nameCovered += r.cov;
     } else {
@@ -91,6 +104,8 @@ export function summarize(acc, glossary) {
         unknown.push([w, r.n]);
       }
       if (r.id && r.free) counts.set(r.id, (counts.get(r.id) || 0) + r.free);
+      if (r.occ) occ.set(r.occ, (occ.get(r.occ) || 0) + r.n);
+      else outside += r.n;
     }
   }
   for (const bucket of Object.values(phrases)) for (const [id, n] of bucket) counts.set(id, (counts.get(id) || 0) + n);
@@ -109,10 +124,14 @@ export function summarize(acc, glossary) {
     tokens,
     unique: surf.size - names.length,
     coverage: base > 0 ? (covered - nameCovered) / base : 0,
+    base, // слов текста без имён
+    outside, // из них нет в словаре
+    freq: [...occ].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, FREQ_ENTRIES),
     uniqueUnknown,
     unknown: unknown.slice(0, 400),
     top,
     names: names.slice(0, 3000),
+    nameCounts: nameN.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, NAME_ENTRIES),
     phrases: {
       pv: { unique: phrases.pv.size, total: sum(phrases.pv) },
       id: { unique: phrases.id.size, total: sum(phrases.id) },

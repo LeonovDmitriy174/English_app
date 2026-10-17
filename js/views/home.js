@@ -10,7 +10,6 @@ import { prettyTitle } from "../epub.js";
 import { plural } from "./folders.js";
 import { cover } from "./cover.js";
 import { sparkline } from "./charts.js";
-import { openProgress } from "./progress.js";
 import { openAddWord } from "./addword.js";
 import { openAppSettings } from "./settings.js";
 
@@ -84,6 +83,7 @@ export function renderHome(root) {
         total ? h("div", { class: "h-num" }, total) : h("div", { class: "h-done" }, icon("check", 26)),
         h("div", { class: "h-cap" }, total ? `${plural(total, ["карточка", "карточки", "карточек"])} к повторению` : "На сегодня всё"),
         total ? h("div", { class: "h-sub" }, `${q.due.length} на повторение, ${q.fresh.length} новых`) : null,
+        q.held ? h("div", { class: "h-sub" }, `ещё ${q.held} подождут до завтра`) : null,
       ),
       total ? h("a", { class: "btn primary", href: "#/review" }, "Повторить") : null,
     );
@@ -142,7 +142,7 @@ export function renderHome(root) {
         review(),
         streakBlock(s),
         ledger(s),
-        h("button", { class: "linkbtn h-more", onClick: () => openProgress() }, "Подробный прогресс"),
+        h("div", { class: "h-links" }, h("a", { class: "linkbtn", href: "#/progress" }, "Подробный прогресс"), app.notes.length > 0 && h("a", { class: "linkbtn", href: "#/notes" }, `Заметки · ${app.notes.length}`)),
       ),
     );
   }

@@ -13,9 +13,11 @@ import { folderList, backLink, plural, collapsed, hasGutter } from "./folders.js
 import { openAppSettings } from "./settings.js";
 import { backupNudge } from "./backupui.js";
 import { openBookWords } from "./bookwords.js";
+import { openCharacters } from "./characters.js";
 import { cover, blankCover } from "./cover.js";
 import { bookProgressBlock } from "./charts.js";
 import { bookProgress, isFinished } from "../reading.js";
+import { bookCoverage, pct, needText, TARGET } from "../coverage.js";
 
 /** Обложка книги из каталога: лежит рядом с приложением. Нет обложки или нет сети — буква, как у книг без обложки. */
 function catalogCover(entry) {
@@ -250,13 +252,32 @@ export function renderLibrary(root, arg = "") {
     }
   }
 
+  /** Охват книги вашими словами; null, пока словарь не загружен или разбор книги старый (без частот). */
+  function coverageOf(book) {
+    if (!app.glossary?.list?.length) return null;
+    return bookCoverage({ stats: book.stats, glossary: app.glossary, cards: app.cards, known: app.known });
+  }
+
+  /** Пояснение под цифрами охвата: что считается знакомым и как его повысить. */
+  function coverageNote(cov) {
+    if (cov.need === null) return `Охвата ${pct(TARGET)} в этой книге не набрать: слов, которых нет в словаре приложения, ${pct(cov.outsideShare)}. Охват считается по словам без имён: знакомыми считаются слова уровня «Знаю» и выше, служебные слова и те, что вы отметили «Знаю».`;
+    return `Охват считается по словам без имён: знакомыми считаются слова уровня «Знаю» и выше, служебные слова и те, что вы отметили «Знаю». Когда он дойдёт до ${pct(TARGET)}, книгу можно читать почти без словаря. Он растёт от слов, которые вы учите, и от проверки в «Пополнить словарь».`;
+  }
+
   function bookMenu(book) {
     const st = book.stats?.tokens ? book.stats : null;
+    const cov = st ? coverageOf(book) : null;
     const facts = st
       ? [
           ["Слов в тексте", fmt(st.tokens)],
           ["Разных слов", fmt(st.unique)],
-          ["Словарь знает", `${Math.round(st.coverage * 100)}% текста`],
+          ...(cov
+            ? [
+                ["Вы знаете", `${pct(cov.share)} слов`],
+                cov.learningShare >= 0.005 ? ["Учите", `${pct(cov.learningShare)} слов`] : null,
+                cov.need === 0 ? [`Охват ${pct(TARGET)}`, "достигнут"] : [`До ${pct(TARGET)} не хватает`, cov.need === null ? "недостижимо" : needText(cov)],
+              ].filter(Boolean)
+            : [["Словарь знает", `${Math.round(st.coverage * 100)}% текста`]]),
           ["Фразовых глаголов", fmt(st.phrases.pv.unique)],
           ["Идиом", fmt(st.phrases.id.unique)],
           ["Не нашлось в словаре", `${fmt(st.uniqueUnknown)} разных слов`],
@@ -289,11 +310,13 @@ export function renderLibrary(root, arg = "") {
         facts
           ? h("dl", { class: "facts" }, facts.map(([k, v]) => [h("dt", null, k), h("dd", null, v)]))
           : h("p", { class: "note" }, app.analysis?.id === book.id ? "Анализ книги идёт…" : book.stats ? "В этой книге не нашлось текста для разбора." : "Анализ книги появится через несколько секунд."),
+        cov ? h("p", { class: "note" }, coverageNote(cov)) : null,
         st?.unknown?.length ? h("p", { class: "note" }, `Чаще всего не находятся: ${st.unknown.slice(0, 12).map(([w, n]) => `${w} (${n})`).join(", ")}.`) : null,
         h(
           "div",
           { class: "set-actions" },
           st?.top ? h("button", { class: "btn block", onClick: () => openBookWords(book) }, icon("list", 20), "Слова этой книги") : null,
+          st?.nameCounts?.length || app.chars.size ? h("button", { class: "btn block", onClick: () => openCharacters(book) }, icon("flag", 20), "Персонажи и названия") : null,
           h(
             "button",
             {
@@ -334,7 +357,10 @@ export function renderLibrary(root, arg = "") {
   const statLine = (b) => {
     if (app.analysis?.id === b.id) return `Анализ книги: ${Math.round(app.analysis.pct * 100)}%`;
     if (b.stats?.tokens === 0) return "В книге не нашлось текста";
-    if (b.stats) return `Словарь знает ${Math.round(b.stats.coverage * 100)}% слов`;
+    if (b.stats) {
+      const cov = coverageOf(b);
+      return cov ? `Вы знаете ${pct(cov.share)} слов` : `Словарь знает ${Math.round(b.stats.coverage * 100)}% слов`;
+    }
     return "";
   };
 
@@ -436,7 +462,14 @@ export function renderLibrary(root, arg = "") {
     } else if (folder === ALL) {
       paintHead({ title: "Все книги", sub: app.books.length ? booksWord(app.books.length) : "", back: { href: pageHash("library"), label: "Книги" }, actions: [addBtn()] });
     } else {
-      paintHead({ title: "Книги", actions: [addBtn(), h("button", { class: "iconbtn", "aria-label": "Настройки", onClick: () => openAppSettings() }, icon("sliders", 22))] });
+      paintHead({
+        title: "Книги",
+        actions: [
+          app.notes.length > 0 && h("button", { class: "iconbtn", "aria-label": `Заметки: ${app.notes.length}`, onClick: () => (location.hash = pageHash("notes")) }, icon("flag", 22)),
+          addBtn(),
+          h("button", { class: "iconbtn", "aria-label": "Настройки", onClick: () => openAppSettings() }, icon("sliders", 22)),
+        ],
+      });
     }
 
     // Под шапкой: напоминание о копии и «Продолжить чтение» (в поиске и на «Все книги» не нужны)

@@ -1,7 +1,7 @@
 // replenish.js — «Пополнить словарь»: стартовый экран (где остановились, тысячи и тесты), проверка слов по частоте и итоги.
 // Правила (что добавляется, что оставляется, как сдаётся тест) в js/freqdeck.js, запись в словарь в js/store/replenish.js.
 import { h, icon, toast, openSheet } from "../dom.js";
-import { app, dictionaryReady, loadFreqState, saveFreqState, loadFreqFile, loadOwnList, saveOwnList, clearOwnList, replenishAnswer, posLabel } from "../store.js";
+import { app, dictionaryReady, loadFreqState, saveFreqState, loadFreqFile, loadOwnList, saveOwnList, clearOwnList, replenishAnswer, newSpreadPlan, newSeriesId, undoSeries, posLabel } from "../store.js";
 import { buildChoices, optionText } from "../choices.js";
 import { speak, canSpeak } from "../tts.js";
 import { levelBar } from "./level.js";
@@ -167,14 +167,14 @@ export function renderReplenish(root) {
 
   // ── проверка ────────────────────────────────────────────────────────────
   function startSeries(from) {
-    run = { mode: "series", from, i: 0, stats: { n: 0, ok: 0, add: 0, fresh: 0, drop: 0, keep: 0, skipped: 0 }, block: 0 };
+    run = { mode: "series", from, i: 0, stats: { n: 0, ok: 0, add: 0, fresh: 0, drop: 0, keep: 0, skipped: 0 }, block: 0, plan: newSpreadPlan(), series: newSeriesId(), start: { done: state.done, last: state.last }, undone: 0 };
     next();
   }
 
   function startExam(k) {
     const list = pickExam(items(), k);
     if (!list.length) return;
-    run = { mode: "exam", k, list, i: 0, stats: { n: 0, ok: 0, add: 0, fresh: 0, drop: 0, keep: 0, skipped: 0 }, block: 0 };
+    run = { mode: "exam", k, list, i: 0, stats: { n: 0, ok: 0, add: 0, fresh: 0, drop: 0, keep: 0, skipped: 0 }, block: 0, plan: newSpreadPlan(), series: newSeriesId(), undone: 0 };
     next();
   }
 
@@ -262,7 +262,7 @@ export function renderReplenish(root) {
       prompt.remove();
       idk.remove();
       const ok = !!chosen?.ok;
-      const res = await replenishAnswer(entry, ok, { ms });
+      const res = await replenishAnswer(entry, ok, { ms, plan: run.plan, series: run.series });
       [...list.children].forEach((b, i) => {
         const o = options[i];
         b.classList.add(o.ok ? "right" : o === chosen ? "wrong" : "dim");
@@ -331,7 +331,39 @@ export function renderReplenish(root) {
       s.fresh && `Добавлено как новые: ${s.fresh}`,
       s.drop && `Уровень снижен у слов: ${s.drop}`,
       s.keep && `Уже были в словаре: ${s.keep}`,
+      run.undone && `Убрано из словаря: ${run.undone}`,
     ].filter(Boolean);
+  }
+
+  /**
+   * «Убрать всё добавленное этой серией»: слова, которые добавила эта проверка (метка серии в карточке), уходят из словаря, а у серии
+   * место в списке возвращается к началу. Два шага, чтобы не убрать одним касанием. rerender рисует экран итогов заново.
+   */
+  function undoControl(rerender) {
+    const n = run.stats.add + run.stats.fresh;
+    if (!n || run.undone) return null;
+    const box = h("div", { class: "rp-undo" });
+    const idle = () => box.replaceChildren(h("button", { class: "linkbtn danger-link", onClick: ask }, "Убрать всё добавленное этой серией"));
+    const ask = () =>
+      box.replaceChildren(
+        h("p", { class: "note tight" }, `Убрать из словаря ${words(n)}, которые добавила эта серия?${run.mode === "series" ? " Место в списке вернётся к началу серии." : ""} Слова, что уже были в словаре, останутся.`),
+        h("div", { class: "rp-undo-act" }, h("button", { class: "btn danger", onClick: go }, "Убрать"), h("button", { class: "btn quiet", onClick: idle }, "Отмена")),
+      );
+    const go = async () => {
+      const removed = await undoSeries(run.series);
+      if (run.mode === "series" && run.start && state.done > run.start.done) {
+        state.done = run.start.done;
+        state.last = run.start.last;
+        await saveFreqState();
+      }
+      run.undone = removed;
+      run.stats.add = 0;
+      run.stats.fresh = 0;
+      toast(`Убрано из словаря: ${words(removed)}`);
+      rerender();
+    };
+    idle();
+    return box;
   }
 
   const doneScreen = (children) => {
@@ -342,12 +374,14 @@ export function renderReplenish(root) {
 
   function seriesDone(finishedList) {
     clearTimeout(timer);
+    run.finished = finishedList;
     const s = run.stats;
     const o = overview(state, total());
     doneScreen([
       h("p", { class: "lead" }, finishedList ? "Список пройден до конца" : s.n ? `Проверено ${words(s.n)}` : "Заходите, когда будет время"),
       s.n ? h("p", { class: "sub" }, `Верных ответов: ${s.ok} из ${s.n}.`) : h("p", { class: "sub" }, "Место в списке сохранено."),
       h("ul", { class: "rp-lines" }, summaryLines(s).map((t) => h("li", null, t))),
+      undoControl(() => seriesDone(run.finished)),
       h("div", { class: "start-row", style: { marginTop: "26px", width: "100%" } }, !o.finished && h("button", { class: "btn primary grow", onClick: () => startSeries(o.next) }, `Продолжить с ${o.next}-го`), h("button", { class: o.finished ? "btn primary grow" : "btn quiet", onClick: home }, "Готово")),
     ]);
   }
@@ -370,6 +404,12 @@ export function renderReplenish(root) {
     const n = run.list.length;
     recordExam(state, run.k, s.ok, n);
     await saveFreqState();
+    examScreen();
+  }
+
+  function examScreen() {
+    const s = run.stats;
+    const n = run.list.length;
     const { share, pass } = examVerdict(s.ok, n);
     const o = overview(state, total());
     doneScreen([
@@ -381,6 +421,7 @@ export function renderReplenish(root) {
           : h("p", { class: "note tight" }, `Тысяча ${run.k} отмечена как пройденная.`)
         : h("p", { class: "note tight" }, "Ничего не откатывается. Слова с ошибками уже вернулись в повторение: повторите их и пересдайте тест, когда будете готовы."),
       h("ul", { class: "rp-lines" }, summaryLines(s).map((t) => h("li", null, t))),
+      undoControl(examScreen),
       h("div", { class: "start-row", style: { marginTop: "26px", width: "100%" } }, !pass && h("button", { class: "btn primary grow", onClick: () => startExam(run.k) }, "Пересдать"), h("button", { class: pass ? "btn primary grow" : "btn quiet", onClick: home }, "Готово")),
     ]);
   }

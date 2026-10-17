@@ -2,17 +2,19 @@
 import { Glossary } from "../lex.js";
 import { DEFAULT_MIX } from "../modes.js";
 import { studyDay } from "../levels.js";
+import { DEFAULT_CAP, emptyDaily } from "../pacing.js";
 
 export const APP_NAME = "Gloss"; // видимое имя; внутренние имена (база данных, кэши, метка копии) прежние: от них зависят уже сохранённые данные
 export const app = {
   glossary: new Glossary([]),
   cards: new Map(),
   activity: { read: {} }, // время чтения по учебным дням, секунды (js/activity.js)
+  chars: new Map(), // заметки к именам и названиям: ключ → { n, t, o? } (js/characters.js)
   known: new Set(), // id слов, которые вы пометили «Знаю» в списке «Слова этой книги»: их там больше не предлагают
   books: [],
-  // newPerDay, mixModes и speedRule это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
-  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, newPerDay: 20, mixModes: [...DEFAULT_MIX], speedRule: true },
-  daily: { day: "", newDone: 0 },
+  // newPerDay, reviewsPerDay, mixModes и speedRule это настройки словаря (js/views/dictsettings.js), остальные настройки приложения
+  settings: { theme: "auto", fontSize: 19, hilite: true, speakOnTap: false, slipCompact: true, newPerDay: 20, reviewsPerDay: DEFAULT_CAP, mixModes: [...DEFAULT_MIX], speedRule: true },
+  daily: emptyDaily(), // что сегодня уже сделано: новые слова, повторенные карточки, добавка к лимиту (js/pacing.js)
   analysis: null, // { id, pct } пока идёт разбор книги
   notes: [], // заметки и закладки к книгам (js/notes.js)
   jump: null, // { id } заметка, к которой читалка должна перейти при открытии
@@ -36,6 +38,6 @@ export const kindOf = (t) => ({ w: "Слова", pv: "Фразовые глаг�
 export const kindClass = (t) => `k-${t}`;
 export function posLabel(item) {
   if (item.t === "pv") return "phrasal verb";
-  if (item.t === "id") return "idiom";
+  if (item.t === "id") return item.pos === "phrase" ? "phrase" : "idiom"; // «phrase» — разговорные фразы (js/phrasedeck.js)
   return POS[item.pos] || item.pos || "";
 }

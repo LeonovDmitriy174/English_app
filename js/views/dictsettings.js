@@ -4,6 +4,7 @@ import { h, openSheet } from "../dom.js";
 import { app, setSetting } from "../store.js";
 import { MODES, normalizeMix } from "../modes.js";
 import { canSpeak } from "../tts.js";
+import { CAP_MIN, CAP_MAX, CAP_STEP } from "../pacing.js";
 import { row, stepper } from "./settings.js";
 
 /** Режимы, которые на этом устройстве вообще возможны (без озвучки нет ни Слуха, ни Диктанта). */
@@ -53,6 +54,7 @@ export function openDictSettings() {
       null,
       h("h2", { class: "set-title" }, "Настройки словаря"),
       row("Новых слов в день", "Сколько новых карточек добавлять в повторение", stepper("newPerDay", { min: 5, max: 60, step: 5, label: "Новых слов в день" })),
+      row("Повторений в день", "Остальные карточки подождут до завтра, ничего не пропадает. Больше можно взять кнопкой «Ещё» на экране повторения", stepper("reviewsPerDay", { min: CAP_MIN, max: CAP_MAX, step: CAP_STEP, label: "Повторений в день" })),
       h("h3", { class: "set-sub" }, "Режимы в миксе"),
       h("p", { class: "note tight" }, "Микс чередует отмеченные режимы. Новым словам и словам на низких уровнях достаются простые задания, на высоких те, где слово нужно вспомнить самому."),
       ...MODES.map((m) => row(m.name, modeAvailable(m.key) ? m.desc : "На этом устройстве нет озвучки", modeSwitch(m))),

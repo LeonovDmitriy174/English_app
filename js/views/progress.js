@@ -1,7 +1,7 @@
-// progress.js — окно «Прогресс»: кривая «Выучено слов», календарь занятий, слова по уровням, повторения и чтение за две недели, серия дней.
+// progress.js — вкладка «Прогресс» (адрес #/progress): кривая «Выучено слов», календарь занятий, слова по уровням, повторения и чтение за две недели, серия дней.
 // Расчёты: js/progress.js и js/charts.js, рисунки: js/views/charts.js.
 // Здесь нет ни времени следующих повторений, ни таймеров: только то, что уже сделано.
-import { h, openSheet } from "../dom.js";
+import { h } from "../dom.js";
 import { app } from "../store.js";
 import { db } from "../db.js";
 import { GROUPS, levelSpread, reviewsByDay, studyDays, streakOf, accuracy } from "../progress.js";
@@ -10,21 +10,32 @@ import { heatmap, learnedCurve, daysChart } from "./charts.js";
 
 const DAYS = 14;
 
-export async function openProgress() {
-  const body = h("div", { class: "prog" }, h("h2", { class: "set-title" }, "Прогресс"));
-  const sheet = openSheet({ content: body, label: "Прогресс", cls: "progress" });
-  let log = [];
-  try {
-    log = await db.all("log");
-  } catch {
-    /* журнал не открылся: покажем то, что есть без него */
-  }
-  if (!sheet.el.isConnected) return sheet; // окно закрыли, пока читался журнал
+export function renderProgress(root) {
+  const body = h("div", { class: "prog" });
+  root.replaceChildren(h("main", { class: "view" }, h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Прогресс"))), body)));
+  let alive = true;
+  paint();
+  return () => {
+    alive = false;
+  };
 
+  async function paint() {
+    let log = [];
+    try {
+      log = await db.all("log");
+    } catch {
+      /* журнал не открылся: покажем то, что есть без него */
+    }
+    if (!alive) return; // вкладку закрыли, пока читался журнал
+    fill(body, log);
+  }
+}
+
+function fill(body, log) {
   const spread = levelSpread(app.cards.values());
   if (!spread.total && !log.length && !Object.keys(app.activity.read).length) {
     body.append(h("p", { class: "note" }, "Здесь появится ваш прогресс, когда вы добавите слова и начнёте их повторять."));
-    return sheet;
+    return;
   }
 
   const now = Date.now();
@@ -62,5 +73,4 @@ export async function openProgress() {
       acc === null ? null : h("dd", null, `${Math.round(acc * 100)}%`),
     ),
   );
-  return sheet;
 }

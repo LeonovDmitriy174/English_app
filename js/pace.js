@@ -15,6 +15,7 @@ export const LIMITS = {
   clozeChoice: { base: 15000 },
   phraseChoice: { base: 12000 },
   formChoice: { base: 15000 },
+  familyChoice: { base: 15000 },
   spell: { base: 12000, perChar: 700 },
   cloze: { base: 16000, perChar: 700 },
   listenType: { base: 14000, perChar: 700 },

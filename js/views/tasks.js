@@ -5,7 +5,7 @@
 // extra: { ms, len } — сколько длился ответ и сколько букв в верном ответе (для скрытого правила скорости, js/pace.js).
 import { h, icon } from "../dom.js";
 import { app, posLabel, setMnemonic, setSkip } from "../store.js";
-import { isLeech } from "../levels.js";
+import { isLeech, KNOWN } from "../levels.js";
 import { levelBar } from "./level.js";
 import { speak, canSpeak } from "../tts.js";
 import { buildChoices, buildWordChoices, optionText, promptText } from "../choices.js";
@@ -14,6 +14,7 @@ import { hintMask, maxHints, maskWord } from "../hints.js";
 import { judge, judgeCloze } from "../judge.js";
 import { FALLBACK, isLenient } from "../modes.js";
 import { formQuestion, inflectedContexts } from "../forms.js";
+import { familyQuestion, familyContexts, classLabel } from "../families.js";
 import { phraseQuestion, canAskPhrase } from "../phrases.js";
 import { compareDictation, dictationPool, pickDictation } from "../dictation.js";
 import { tokenize } from "../lex.js";
@@ -200,19 +201,23 @@ export function createTasks(env) {
     const built = buildChoices(card, app.glossary, app.cards);
     if (!built || built.options.length < 3) return false; // в словаре не нашлось, из чего выбирать
     const { options, kind } = built;
-    const q = quote(card);
+    // Предложение с этим словом стоит над вариантами, пока слово ещё учится: из ваших книг, а если их нет, пример из словаря.
+    // Каждый раз берётся другое. С уровня «Знаю» предложения нет: слово нужно вспомнить без подсказки.
+    const ctx = card.srs.lv < KNOWN ? pickContext(card, { glossary: app.glossary, last: card.lastCtx }) : null;
+    const q = ctx && [h("blockquote", { class: "cite" }, ...filled(ctx)), sourceOf(ctx) && h("p", { class: "src" }, sourceOf(ctx))];
     return pickScreen({
       card,
       task,
       head: h("div", null, headword(card), q && h("div", { class: "rv-ctx" }, q)),
       prompt: kind === "en" ? "Выберите определение" : "Выберите перевод",
       options,
+      ctxText: ctx?.s || "",
       reveal(after) {
         // Если вариант на кнопке обрезан, полный текст показываем под вопросом
         const full = card[kind];
         if (full && optionText(card, kind) !== full) after.append(h("p", { class: kind === "ru" ? "ru" : "ru auto" }, full));
         if (kind !== "en" && card.en) after.append(h("p", { class: "def" }, card.en));
-        if (card.ex) after.append(h("p", { class: "exl" }, h("small", null, "Пример"), card.ex));
+        if (card.ex && ctx?.s !== card.ex.trim()) after.append(h("p", { class: "exl" }, h("small", null, "Пример"), card.ex));
       },
     });
   }
@@ -312,6 +317,49 @@ export function createTasks(env) {
         if (chosen && !chosen.ok) after.append(h("p", { class: "note tight" }, `В книге здесь ${q.answer}. Другая форма тоже могла подойти, поэтому уровень за этот ответ не снижен.`));
         const src = sourceOf(ctx);
         if (src) after.append(h("p", { class: "src" }, src));
+        after.append(revealCard(card, res));
+      },
+    });
+  }
+
+  // Предложение с пропуском и слова одной семьи (growth, grow, grower): нужна та часть речи, что подходит к предложению.
+  // Часть речи слова над вопросом не пишется и перевод не подсказывается: по ним был бы виден ответ.
+  const hasEntry = (w) => app.glossary.words.get(w)?.w === w;
+  function familyChoice(card, task) {
+    const pool = familyContexts(contextPool(card, app.glossary, { exact: true }), card, { has: hasEntry });
+    if (!pool.length) return false;
+    let ctx = null;
+    let q = null;
+    for (let tries = 0; tries < 4 && !q; tries++) {
+      ctx = pickRandom(pool, card.lastCtx);
+      q = familyQuestion(card, ctx, { has: hasEntry });
+    }
+    if (!q) return false;
+    const sentence = blanked(ctx, false);
+    return pickScreen({
+      card,
+      task,
+      ctxText: ctx.s,
+      head: h("div", { class: "rv-q" }, sentence),
+      prompt: "Какое слово из этой семьи подходит?",
+      options: q.options,
+      word: true,
+      reveal(after, res, chosen) {
+        sentence.replaceChildren(...filled(ctx));
+        if (chosen && !chosen.ok) after.append(h("p", { class: "note tight" }, `В книге здесь ${q.answer}. Подойти могло и другое слово, поэтому уровень за этот ответ не снижен.`));
+        const src = sourceOf(ctx);
+        if (src) after.append(h("p", { class: "src" }, src));
+        after.append(
+          h(
+            "ul",
+            { class: "fam", "aria-label": "Слова одной семьи" },
+            q.rows.map((r) => {
+              const e = app.glossary.words.get(r.w);
+              const ru = (e?.ru || e?.rm || "").split(";")[0].trim();
+              return h("li", { class: r.me ? "me" : "" }, h("span", { class: "fw" }, r.w), h("span", { class: "fp" }, classLabel(r.cls)), ru && h("span", { class: "fr" }, ru));
+            }),
+          ),
+        );
         after.append(revealCard(card, res));
       },
     });
@@ -573,7 +621,7 @@ export function createTasks(env) {
     }
   }
 
-  const impl = { choice, choiceBack, clozeChoice, formChoice, phraseChoice, listenChoice, spell, cloze, listenType, dictation };
+  const impl = { choice, choiceBack, clozeChoice, formChoice, familyChoice, phraseChoice, listenChoice, spell, cloze, listenType, dictation };
 
   return {
     /** Возможно ли задание для этой карточки на этом устройстве (есть ли предложение, озвучка). */
@@ -582,6 +630,7 @@ export function createTasks(env) {
       if (task === "cloze") return contextPool(card, app.glossary).length > 0;
       if (task === "clozeChoice") return contextPool(card, app.glossary, { exact: true }).length > 0;
       if (task === "formChoice") return inflectedContexts(contextPool(card, app.glossary), card).length > 0;
+      if (task === "familyChoice") return familyContexts(contextPool(card, app.glossary, { exact: true }), card, { has: hasEntry }).length > 0;
       if (task === "phraseChoice") return canAskPhrase(card) && !!(card.ru || card.rm || card.en) && !!phraseQuestion({ card, entries: app.glossary.list });
       if (task === "dictation") return canSpeak() && dictationPool(contextPool(card, app.glossary)).length > 0;
       return true;

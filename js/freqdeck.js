@@ -15,6 +15,7 @@
 // если он загружен, берётся только он. Пока нет ни того ни другого, слова упорядочены по частоте из словаря (она округлена до 0,1,
 // поэтому порядок внутри одной ступени условный).
 import { KNOWN, LADDER, WAITS, dueInDays } from "./levels.js";
+import { spreadDue } from "./pacing.js";
 
 export const SIZE = 5000; // сколько слов в списке
 export const BLOCK = 1000; // после каждой такой порции тест
@@ -191,13 +192,15 @@ export function decide({ card, ok, slow = false }) {
 }
 
 /**
- * Карточка для слова, добавленного верным ответом. Срок разведён на несколько дней, чтобы слова, добавленные за один заход,
- * не вернулись все в один день: для «знаю» от 3 до 5 суток, для остальных от своего срока до +1 суток.
+ * Карточка для слова, добавленного верным ответом. Срок разводится по дням, чтобы слова, добавленные за один заход, не вернулись
+ * все сразу (js/pacing.js). С планом { load, budget } (сколько карточек уже приходится на каждый день) берётся первый день после
+ * своего срока, где ещё есть место: для «знаю» до двух недель вперёд, для остальных до пяти дней. Без плана (когда нагрузка
+ * неизвестна) для «знаю» срок случайный от 3 до 5 суток, для остальных от своего до +1 суток.
  */
-export function addedSrs(now = Date.now(), lv = ADD_LEVEL, rng = Math.random) {
+export function addedSrs(now = Date.now(), lv = ADD_LEVEL, { rng = Math.random, load, budget } = {}) {
   const days = WAITS[Math.min(Math.max(lv, 1), WAITS.length) - 1].days || 1;
-  const extra = Math.floor(rng() * (lv >= KNOWN ? 3 : 2));
-  return { lv, due: dueInDays(now, days + extra), last: now, reps: 1, lapses: 0, v: LADDER };
+  const due = load ? spreadDue(now, days, { load, budget, maxSpread: lv >= KNOWN ? 14 : 5 }) : dueInDays(now, days + Math.floor(rng() * (lv >= KNOWN ? 3 : 2)));
+  return { lv, due, last: now, reps: 1, lapses: 0, v: LADDER };
 }
 
 // ── Состояние ───────────────────────────────────────────────────────────────

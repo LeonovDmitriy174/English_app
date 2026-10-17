@@ -59,6 +59,14 @@ test("разбор: имя, совпавшее со словом словаря,
   assert.ok(s.names.includes("will"));
 });
 
+test("разбор: «I» и его сокращения именами не считаются, а Harry остаётся именем", () => {
+  const s = stats("Then I saw Harry. Later I'm sure I ran, and I’ll see Harry.");
+  assert.ok(!s.names.includes("i") && !s.names.includes("i'm"), "местоимение не имя");
+  assert.ok(!s.nameCounts.some(([w]) => w === "i" || w.startsWith("i'")), "и не попадает в «Персонажи и названия»");
+  assert.ok(s.names.includes("harry"));
+  assert.equal(s.base, s.tokens - 2, "в охват входят все слова, кроме двух Harry");
+});
+
 test("разбор: частые идут первыми, при равенстве по алфавиту, а список ограничен", () => {
   const s = stats("castle castle wand wand wand go go");
   assert.deepEqual(s.top.map(([id]) => id), ["w:wand", "w:castle", "w:go"]);
@@ -73,4 +81,30 @@ test("подпись разбора включает версию: старые 
   assert.ok(statsSignature(g).startsWith(`v${ANALYSIS_VERSION}.`));
   assert.notEqual(statsSignature(g), dictSignature(g));
   assert.equal(stats("wand").sig, statsSignature(g));
+});
+
+// ── Частоты всех слов (для охвата, js/coverage.js) ───────────────────────────
+test("разбор запоминает частоты всех слов, в том числе единичных и внутри фраз; имена и слова без записи считаются отдельно", () => {
+  const s = stats("The wand and the castle. Harry took the wand. Never give up, and go home. Zzyzx!");
+  const freq = Object.fromEntries(s.freq);
+  assert.equal(freq["w:wand"], 2);
+  assert.equal(freq["w:castle"], 1, "единичное слово тоже попадает в частоты");
+  assert.equal(freq["w:go"], 1);
+  assert.ok(!("pv:give up" in freq), "в частотах только слова");
+  assert.deepEqual(s.freq.map(([id]) => id)[0], "w:wand", "самые частые первыми");
+  assert.ok(s.base > 0 && s.outside > 0 && s.outside < s.base, "слова без записи словаря посчитаны: «Zzyzx», «the», «and» и т. д.");
+  // base — слова текста без имён: «Harry» с заглавной внутри предложения (имя) в них не входит
+  const t = stats("Then Harry saw it. Later Harry ran.");
+  assert.equal(t.base, t.tokens - 2);
+  assert.ok(t.names.includes("harry"));
+});
+
+test("разбор: слово внутри фразы попадает и в частоты слов, и в частоты фраз", () => {
+  const s = stats("Never give up.", "Do not give up.");
+  assert.equal(Object.fromEntries(s.top)["pv:give up"], 2);
+  assert.ok(!("w:give" in Object.fromEntries(s.freq)), "в словаре нет отдельной записи give, поэтому её нет и в частотах");
+});
+
+test("версия разбора поднята, чтобы старые книги разобрались заново и получили частоты", () => {
+  assert.ok(ANALYSIS_VERSION >= 3);
 });

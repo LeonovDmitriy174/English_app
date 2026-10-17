@@ -7,8 +7,10 @@ import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
 import { renderDict } from "./views/dict.js";
 import { renderReplenish } from "./views/replenish.js";
+import { renderPhrases } from "./views/phrases.js";
 import { renderReview } from "./views/review.js";
 import { renderNotes } from "./views/notes.js";
+import { renderProgress } from "./views/progress.js";
 import { remember, tabHref, origin } from "./nav.js";
 
 installErrorLog(); // неожиданные ошибки попадают в журнал (настройки → «Сведения для отладки»)
@@ -21,7 +23,7 @@ const tabs = [
   ["library", "Книги", "book"],
   ["dict", "Словарь", "bookmark"],
   ["review", "Повторение", "repeat"],
-  ["notes", "Заметки", "flag"],
+  ["progress", "Прогресс", "chart"],
 ];
 const tabbar = h("nav", { class: "tabbar", "aria-label": "Разделы" });
 // Сообщения над нижней панелью: «Доступна новая версия», «Словарь не загрузился»
@@ -82,11 +84,17 @@ function route() {
   } else if (name === "replenish") {
     current = "dict"; // «Пополнить словарь» открывается из словаря, и вкладка «Словарь» остаётся отмеченной
     cleanup = renderReplenish(stage);
+  } else if (name === "phrases") {
+    current = "dict"; // разговорные фразы открываются из словаря
+    cleanup = renderPhrases(stage);
   } else if (name === "review") {
     current = "review";
     cleanup = renderReview(stage);
+  } else if (name === "progress") {
+    current = "progress";
+    cleanup = renderProgress(stage);
   } else if (name === "notes") {
-    current = "notes";
+    current = "library"; // заметки открываются из «Книг» и с главной, и вкладка «Книги» остаётся отмеченной
     remember("notes", arg);
     cleanup = renderNotes(stage, arg);
   } else if (name === "library") {
