@@ -3,6 +3,7 @@
 import { h, icon } from "../dom.js";
 import { app, subscribe, queue, resumeBook } from "../store.js";
 import { db } from "../db.js";
+import { cleanLog } from "../records.js";
 import { homeSummary } from "../home.js";
 import { bookProgress, fmtWords } from "../reading.js";
 import { fmtDuration } from "../activity.js";
@@ -151,7 +152,7 @@ export function renderHome(root) {
   const off = subscribe(paint);
   db.all("log")
     .then((rows) => {
-      logCache = rows;
+      logCache = cleanLog(rows);
       paint();
     })
     .catch(() => {

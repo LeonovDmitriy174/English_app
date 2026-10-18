@@ -16,7 +16,7 @@ export const FREQ_ENTRIES = 15000;
 export const NAME_ENTRIES = 600;
 
 /** Версия разбора: растёт, когда в разбор добавляется что-то новое. Книги, разобранные раньше, разбираются заново. */
-export const ANALYSIS_VERSION = 3;
+export const ANALYSIS_VERSION = 4;
 
 /** Подпись разбора: словарь и версия разбора. Когда она меняется, книги разбираются заново. */
 export const statsSignature = (glossary) => `v${ANALYSIS_VERSION}.${dictSignature(glossary)}`;

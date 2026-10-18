@@ -5,7 +5,7 @@ import { app, dictionaryReady, loadFreqState, saveFreqState, loadFreqFile, loadO
 import { buildChoices, optionText } from "../choices.js";
 import { speak, canSpeak } from "../tts.js";
 import { levelBar } from "./level.js";
-import { MIN_LIST, EXAM_SIZE, PASS_SHARE, buildRanking, overview, startRank, placeInList, markChecked, pickExam, recordExam, examVerdict, blockOf, blockRange, parseOwnList } from "../freqdeck.js";
+import { MIN_LIST, EXAM_SIZE, PASS_SHARE, buildRanking, overview, placeInList, markChecked, pickExam, recordExam, examVerdict, blockOf, blockRange, parseOwnList } from "../freqdeck.js";
 
 const plural = (n, f) => {
   const a = n % 10;

@@ -4,6 +4,7 @@
 import { h } from "../dom.js";
 import { app } from "../store.js";
 import { db } from "../db.js";
+import { cleanLog } from "../records.js";
 import { GROUPS, levelSpread, reviewsByDay, studyDays, streakOf, accuracy } from "../progress.js";
 import { activityGrid, learnedSeries, readByDay, plural, HEAT_WEEKS } from "../charts.js";
 import { heatmap, learnedCurve, daysChart } from "./charts.js";
@@ -22,7 +23,7 @@ export function renderProgress(root) {
   async function paint() {
     let log = [];
     try {
-      log = await db.all("log");
+      log = cleanLog(await db.all("log"));
     } catch {
       /* журнал не открылся: покажем то, что есть без него */
     }

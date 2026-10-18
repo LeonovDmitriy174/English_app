@@ -3,6 +3,8 @@
 // Все карточки, уровни, журнал ответов и заметки живут только на этом телефоне, поэтому копия — единственная защита от потери.
 // Приложение не делает её само (серверов нет), но помнит, когда копия была сделана, и мягко напоминает.
 
+import { cleanLog } from "./records.js";
+
 export const NUDGE_DAYS = 14; // через сколько дней без копии напоминать
 export const SNOOZE_DAYS = 3; // на сколько дней убирает напоминание «Позже»
 export const WORTH = 10; // с какого числа карточек и заметок копия вообще имеет смысл
@@ -68,7 +70,7 @@ export function nudgeText({ never, days }, cards = 0) {
  */
 export function newLogRows(local, incoming) {
   const key = (r) => `${r.id}|${r.t}`;
-  const have = new Set((Array.isArray(local) ? local : []).map(key));
+  const have = new Set(cleanLog(local).map(key));
   const out = [];
   for (const r of Array.isArray(incoming) ? incoming : []) {
     if (!r || typeof r !== "object" || typeof r.id !== "string" || !Number.isFinite(r.t)) continue;

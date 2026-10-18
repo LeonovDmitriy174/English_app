@@ -1,6 +1,6 @@
 // cards.js — словарь пользователя (карточки) и очередь повторения.
 import { db } from "../db.js";
-import { lemmaCandidates } from "../lex.js";
+import { lemmaCandidates, norm } from "../lex.js";
 import * as levels from "../levels.js";
 import { capOf, isWritten } from "../modes.js";
 import { leeches } from "../leech.js";
@@ -10,7 +10,13 @@ import { app, emit, today } from "./state.js";
 // ── Словарь пользователя ──────────────────────────────────────────────────
 export function resolveWord(raw) {
   const fromGlossary = app.glossary.lookupWord(raw);
-  if (fromGlossary) return fromGlossary;
+  if (fromGlossary) {
+    // Слово, добавленное раньше под своей формой (said, found), а начальной формы в словаре у вас нет: остаётся при своей карточке,
+    // иначе в тексте оно перестало бы выглядеть добавленным
+    const own = app.glossary.words.get(norm(raw));
+    if (own && own !== fromGlossary && app.cards.has(own.id) && !app.cards.has(fromGlossary.id)) return own;
+    return fromGlossary;
+  }
   for (const c of lemmaCandidates(raw)) {
     const card = app.cards.get(`w:${c}`);
     if (card) return card;

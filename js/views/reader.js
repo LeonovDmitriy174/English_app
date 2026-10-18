@@ -80,7 +80,11 @@ export function renderReader(root, bookId) {
     location.hash = lastPage.library;
     return;
   }
-  let chIdx = Math.min(book.progress?.ch ?? 0, book.chapters.length - 1);
+  if (!book.chapters.length) {
+    root.replaceChildren(h("main", { class: "view no-tabs" }, h("div", { class: "page" }, h("p", { class: "empty lead" }, "В этой книге нет глав"), h("p", { class: "note" }, "Удалите книгу и загрузите файл EPUB заново."), h("a", { class: "btn", href: lastPage.library }, "К книгам"))));
+    return;
+  }
+  let chIdx = Math.max(0, Math.min(Math.floor(book.progress?.ch ?? 0), book.chapters.length - 1));
   let paras = [];
   let slip = null;
   let selected = [];

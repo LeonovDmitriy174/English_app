@@ -11,6 +11,8 @@ import { mergeProgress } from "../reading.js";
 import { APP_VERSION, buildLabel } from "../build.js";
 import { app, emit, APP_NAME } from "./state.js";
 import { applySettings } from "./settings.js";
+import { sanitizeSettings } from "../prefs.js";
+import { cleanLog } from "../records.js";
 import { persistGroups } from "./folders.js";
 import { persistNotes } from "./notes.js";
 import { setActivity } from "./activity.js";
@@ -73,7 +75,7 @@ export async function diagnosticsReport() {
 }
 
 export async function exportData() {
-  const log = await db.all("log");
+  const log = cleanLog(await db.all("log"));
   return JSON.stringify(
     {
       app: BACKUP_TAG,
@@ -95,15 +97,29 @@ export async function exportData() {
   );
 }
 
+const isObject = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+
 export async function importData(text) {
-  const data = JSON.parse(text);
-  if (data.app !== BACKUP_TAG || !Array.isArray(data.cards)) throw new Error("Это не резервная копия приложения.");
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("Это не резервная копия приложения: файл не читается.");
+  }
+  if (!isObject(data) || data.app !== BACKUP_TAG || !Array.isArray(data.cards)) throw new Error("Это не резервная копия приложения.");
   const better = [];
+  let skipped = 0;
   for (const c of data.cards) {
-    if (!c.srs) {
-      c.srs = levels.fromLegacy(c.fsrs);
+    // повреждённая запись (не объект, без названия слова) пропускается, остальные копии загружаются
+    if (!isObject(c) || typeof c.id !== "string" || !c.id || typeof c.w !== "string") {
+      skipped += 1;
+      continue;
+    }
+    if (!isObject(c.srs)) {
+      c.srs = levels.fromLegacy(isObject(c.fsrs) ? c.fsrs : undefined);
       delete c.fsrs;
     } else c.srs = levels.migrateSrs(c.srs); // копия, снятая по прежней лестнице уровней, переводится на нынешнюю
+    c.srs = levels.sanitizeSrs(c.srs);
     const mine = app.cards.get(c.id);
     if (!mine || (c.srs.reps || 0) > (mine.srs.reps || 0) || (c.srs.last || 0) > (mine.srs.last || 0)) better.push(c);
   }
@@ -119,7 +135,8 @@ export async function importData(text) {
   // Позиции и папки книг: если книги на этом устройстве ещё нет, запоминаем до её загрузки.
   const waiting = (await db.get("kv", "progress"))?.value || {};
   const waitingMeta = (await db.get("kv", "bookmeta"))?.value || {};
-  for (const p of data.progress || []) {
+  for (const p of Array.isArray(data.progress) ? data.progress : []) {
+    if (!isObject(p) || typeof p.id !== "string") continue;
     const groups = (Array.isArray(p.groups) ? p.groups : []).map((id) => merged.map.get(id)).filter(Boolean);
     const b = app.books.find((x) => x.id === p.id);
     if (b) {
@@ -163,12 +180,12 @@ export async function importData(text) {
     if (rows.length) await db.addMany("log", rows);
     logAdded = rows.length;
   }
-  if (data.settings) {
-    Object.assign(app.settings, data.settings);
+  if (isObject(data.settings)) {
+    Object.assign(app.settings, sanitizeSettings(data.settings));
     app.settings.mixModes = normalizeMix(app.settings.mixModes);
     applySettings();
     await db.put("kv", { key: "settings", value: app.settings });
   }
   emit();
-  return { cards: added, notes: notesAdded, log: logAdded };
+  return { cards: added, notes: notesAdded, log: logAdded, skipped };
 }

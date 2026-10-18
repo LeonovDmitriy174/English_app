@@ -1,0 +1,49 @@
+// Проверка словаря (tools/audit_dict.mjs): чистый словарь проходит, словарь с дефектами нет.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { audit } from "../tools/audit_dict.mjs";
+
+// Достаточно много «слов», чтобы проверка не приняла словарь за пробный образец (меньше 2000 слов пропускается)
+const letter = (n) => String.fromCharCode(97 + n);
+const filler = () =>
+  Array.from({ length: 2100 }, (_, i) => ({ t: "w", w: `q${letter(i % 26)}${letter(Math.floor(i / 26) % 26)}${letter(Math.floor(i / 676))}`, pos: "noun", ru: "слово", en: "a word", z: 4 }));
+
+test("образец меньше 2000 слов пропускается", () => {
+  const r = audit([{ t: "w", w: "cat", ru: "кот", en: "cat", z: 5 }]);
+  assert.equal(r.skipped, true);
+  assert.deepEqual(r.errors, []);
+});
+
+test("чистый словарь без ошибок", () => {
+  const r = audit(filler());
+  assert.equal(r.skipped, false);
+  assert.deepEqual(r.errors, []);
+});
+
+test("словарь с дефектами: каждый находится", () => {
+  const bad = [
+    ...filler(),
+    { t: "w", w: "dupe", ru: "раз", en: "x", z: 4 },
+    { t: "w", w: "dupe", ru: "два", en: "x", z: 4 },
+    { t: "w", w: "tagged", pos: "noun", ru: "{{label|en|x}} слово", en: "x", z: 4 },
+    { t: "w", w: "woulda", pos: "verb", ru: "если бы ты не открыл окно!; опоздает ли автобус.; что скоро вернется.", en: "x", z: 6.3 },
+    { t: "w", w: "freq", pos: "noun", rm: "только автоперевод", en: "very common", z: 7 },
+    // у начальной формы нет русского перевода, поэтому said остаётся при своей записи — а надо, чтобы вёл к say
+    { t: "w", w: "say", pos: "verb", rm: "говорить", en: "to speak", z: 6 },
+    { t: "w", w: "said", pos: "adjective", ru: "упомянутый", en: "aforesaid", of: ["say"], z: 6 },
+    { t: "w", w: "x-bad", of: "not-a-list", ru: "ик", en: "x", z: 3 },
+    { t: "zz", w: "unknown-type" },
+  ];
+  const text = audit(bad).errors.join("\n");
+  assert.match(text, /повторяются записи: w:dupe/);
+  assert.match(text, /обломки разметки: tagged/);
+  assert.match(text, /обрывки предложений: woulda/);
+  assert.match(text, /нет русского перевода: freq/);
+  assert.match(text, /said → said \(нужно say\)/);
+  assert.match(text, /неправильного вида/);
+});
+
+test("HTML-сущности в переводах не ошибка: приложение заменяет их при загрузке", () => {
+  const r = audit([...filler(), { t: "w", w: "askedx", pos: "verb", rm: "&lt; &lt; Арсед &gt; &gt;", en: "x", z: 4 }]);
+  assert.deepEqual(r.errors, []);
+});

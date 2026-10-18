@@ -71,6 +71,9 @@ export function selectChapters(chapters) {
   });
 }
 
+/** Самая длинная глава, которую приложение открывает: около 400 тысяч слов (600 000 слов в «Войне и мире» целиком). Больше бывает только у книг без деления на главы. */
+export const MAX_CHAPTER_CHARS = 2_400_000;
+
 /** Читает EPUB. Возвращает { meta, chapters, cover } — всё, что нужно для библиотеки. */
 export async function readEpub(buffer) {
   const zip = await openZip(buffer);
@@ -127,6 +130,9 @@ export async function readEpub(buffer) {
   real.forEach((c, i) => {
     if (!c.title) c.title = `Часть ${i + 1}`;
   });
+  // Глава выводится на экран целиком (по узлу на слово): миллион слов в одной главе занимает больше гигабайта памяти и убивает вкладку на телефоне
+  const tooLong = real.find((c) => c.chars > MAX_CHAPTER_CHARS);
+  if (tooLong) throw new Error(`В книге есть глава длиннее ${Math.round(MAX_CHAPTER_CHARS / 6 / 1000)} тысяч слов («${tooLong.title.slice(0, 40)}»): телефон её не откроет. Разделите книгу на главы, например в Calibre, и загрузите снова.`);
 
   // Обложка
   let cover = null;

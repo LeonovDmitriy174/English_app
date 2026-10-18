@@ -1,6 +1,8 @@
 // lex.js — токенизация, приведение к начальной форме, словарь, поиск фраз.
 // Чистые функции без DOM: модуль проверяется в Node (tests/lex.test.mjs).
 
+import { fixEntry } from "./dictfixes.js";
+
 const APOS = /[’‘`]/g;
 export const norm = (s) => s.toLowerCase().replace(APOS, "'");
 export const WORD_RE = /\p{L}+(?:['’]\p{L}+)*/gu;
@@ -104,7 +106,7 @@ stand: stood
 steal: stole stolen
 stick: stuck
 sting: stung
-strike: struck
+strike: struck stricken
 swear: swore sworn
 sweep: swept
 swim: swam swum
@@ -138,6 +140,24 @@ shelf: shelves
 half: halves
 good: better best
 bad: worse worst
+mistake: mistook mistaken
+misunderstand: misunderstood
+overtake: overtook overtaken
+rebuild: rebuilt
+remake: remade
+slay: slew slain
+speed: sped
+undo: undid undone
+weave: wove woven
+withhold: withheld
+bacterium: bacteria
+criterion: criteria
+phenomenon: phenomena
+fungus: fungi
+louse: lice
+millennium: millennia
+stratum: strata
+alumnus: alumni
 `;
 
 const IRREGULAR = new Map();
@@ -155,6 +175,26 @@ for (const [form, lemmas] of IRREGULAR) for (const l of lemmas) FORMS_OF.set(l, 
 /** Неправильные формы слова из таблицы («grow» → grew, grown). Пустой список, если слово правильное или его нет в таблице. */
 export const irregularForms = (lemma) => [...(FORMS_OF.get(norm(lemma)) || [])];
 
+// Корень из одного слога, оканчивающийся на «согласная–гласная–согласная» (hat, star, us, writ, smil): у такого слова форма без удвоения, значит, слово кончалось на немую «e».
+const silentE = (b) => /(?:^|[^aeiou])[aeiou][^aeiouwxy]$/.test(b) && (b.match(/[aeiouy]+/g) || []).length === 1;
+
+/** Слово без притяжательного «’s» и сокращений: «that’s» → that, «isn’t» → is, «they’ll» → they. */
+const stripClitic = (raw) => {
+  let w = norm(raw).replace(/'s$/, "").replace(/s'$/, "s").replace(/n't$/, "").replace(/'(ll|re|ve|d|m)$/, "");
+  if (w.endsWith("'")) w = w.slice(0, -1);
+  return w;
+};
+
+// Отрицания, у которых «n’t» отрезается не по правилу (can’t → ca, won’t → wo). Нужны для поиска слова; для поиска фраз не годятся:
+// «can’t do» не должно находить прилагательное can-do.
+const NEGATIVE = { "can't": "can", "won't": "will", "shan't": "shall", "ain't": "be" };
+
+/** Как слово написано в тексте: оно само и оно без «’s», «n’t» и т. п. */
+const surfaceForms = (raw) => {
+  const n = norm(raw);
+  return [...new Set([n, NEGATIVE[n] || stripClitic(raw)])];
+};
+
 /** Возможные начальные формы слова в порядке убывания вероятности. */
 export function lemmaCandidates(raw) {
   const out = [];
@@ -162,32 +202,41 @@ export function lemmaCandidates(raw) {
   const add = (x, short = false) => {
     if (x && (x.length > 1 || short) && !out.includes(x)) out.push(x);
   };
-  let w = norm(raw);
-  add(w, w === "a" || w === "i");
-  w = w.replace(/'s$/, "").replace(/s'$/, "s").replace(/n't$/, "").replace(/'(ll|re|ve|d|m)$/, "");
-  if (w.endsWith("'")) w = w.slice(0, -1);
+  const first = norm(raw);
+  add(first, first === "a" || first === "i");
+  const w = stripClitic(raw);
   add(w, w === "a" || w === "i");
   const irr = IRREGULAR.get(w);
   if (irr) irr.forEach(add);
 
   const undouble = (b) => (b.length > 2 && b[b.length - 1] === b[b.length - 2] ? b.slice(0, -1) : null);
 
-  if (w.endsWith("ies")) add(w.slice(0, -3) + "y");
+  // Множественное число и «-s» у глагола. Срез «s» идёт раньше среза «es»: eyes → eye (а не ey), cares → care (а не car), uses → use (а не us).
+  // Лишь после «ss» отрезаем «es» целиком (boss-es), иначе «bosse» уже не слово. Лишние варианты безвредны: несуществующее слово в словаре не найдётся.
+  if (w.endsWith("ies")) {
+    if (w.length <= 5) add(w.slice(0, -1)); // lies, ties, dies: «tie» вероятнее, чем «ty»
+    add(w.slice(0, -3) + "y");
+  }
   if (w.endsWith("ves")) {
     add(w.slice(0, -3) + "f");
     add(w.slice(0, -3) + "fe");
   }
-  if (w.endsWith("es")) add(w.slice(0, -2));
+  if (w.endsWith("sses")) add(w.slice(0, -2));
   if (w.endsWith("s") && !w.endsWith("ss")) add(w.slice(0, -1));
+  if (w.endsWith("es")) add(w.slice(0, -2));
   if (w.endsWith("ied")) add(w.slice(0, -3) + "y");
+  // Корень из одного слога и одной согласной на конце (hat, star, us, writ) в формах с «-ed», «-ing», «-er», «-est» удваивает её (hatted, starring).
+  // Поэтому hated, staring, using, writing идут от hate, stare, use, write, а не от hat, star, us, writ.
   if (w.endsWith("ed")) {
     const b = w.slice(0, -2);
+    if (silentE(b)) add(w.slice(0, -1));
     add(b);
     add(w.slice(0, -1));
     add(undouble(b));
   }
   if (w.endsWith("ing") && w.length > 4) {
     const b = w.slice(0, -3);
+    if (silentE(b)) add(b + "e");
     add(b);
     add(b + "e");
     add(undouble(b));
@@ -200,6 +249,7 @@ export function lemmaCandidates(raw) {
   }
   if (w.endsWith("er") && w.length > 4) {
     const b = w.slice(0, -2);
+    if (silentE(b)) add(w.slice(0, -1));
     add(b);
     add(w.slice(0, -1));
     add(undouble(b));
@@ -207,11 +257,15 @@ export function lemmaCandidates(raw) {
   }
   if (w.endsWith("est") && w.length > 5) {
     const b = w.slice(0, -3);
+    if (silentE(b)) add(w.slice(0, -2));
     add(b);
     add(w.slice(0, -2));
     add(undouble(b));
     if (w.endsWith("iest")) add(w.slice(0, -4) + "y");
   }
+  // В самом конце: «picked» должно сначала искаться как pick, а не как pic
+  if (w.endsWith("cked")) add(w.slice(0, -3));
+  if (w.endsWith("cking")) add(w.slice(0, -4));
   return out;
 }
 
@@ -224,15 +278,39 @@ export function tokenize(text) {
   return out;
 }
 
+/**
+ * Формы, которые в книгах чаще живут своей жизнью, чем как форма глагола или существительного: left hand, the ground, a bit, people.
+ * Они остаются при своей записи, даже если стоят в таблице неправильных форм.
+ */
+const OWN_ENTRY = new Set(
+  ("left ground rose bit born being doing people better best worse worst leaves lives bound wound " +
+    "clothes means thanks pants jeans trousers glasses scissors goods news arms customs manners remains sweets greens").split(" "),
+);
+
+const isPlural = (w) => /[^s]s$/.test(w) && !w.includes("'");
+
+const openPosOf = (pos) => (pos || "").toLowerCase().split(/[\s,;/]+/).filter((p) => ["noun", "verb", "adjective", "adverb", "n", "v", "adj", "adv"].includes(p));
+
+/** Начальной формой может быть существительное, глагол, прилагательное или наречие (не междометие, не местоимение). Без пометки части речи годится. */
+const isOpenPos = (pos) => !(pos || "").trim() || openPosOf(pos).length > 0;
+
+/** Все самостоятельные части речи записи входят и в начальную форму (heads — noun, head — noun, verb). */
+const posFits = (pos, lemmaPos) => {
+  const mine = openPosOf(pos);
+  const theirs = openPosOf(lemmaPos);
+  return mine.length > 0 && mine.every((p) => theirs.includes(p));
+};
+
 const candsOf = (tok) => (tok.c ??= new Set(lemmaCandidates(tok.raw)));
 
 // ── Словарь ───────────────────────────────────────────────────────────────
 export class Glossary {
   constructor(entries) {
-    this.list = entries.map((e) => ({ ...e, id: `${e.t}:${e.w}` }));
+    this.list = entries.map((e) => ({ ...fixEntry(e), id: `${e.t}:${e.w}` }));
     this.byId = new Map(this.list.map((e) => [e.id, e]));
     this.words = new Map(); // слово или доп. форма -> запись (одиночные слова)
     this.firstIndex = new Map(); // первый токен шаблона -> [{entry, pat, sep}]
+    this.lemmas = new Map(); // запись -> её начальная форма или null (см. lemmaOf)
     for (const e of this.list) {
       const pats = (e.m && e.m.length ? e.m : [e.w]).map((p) => p.split(/\s+/));
       const multi = pats.some((p) => p.length > 1);
@@ -249,13 +327,77 @@ export class Glossary {
     }
   }
 
-  /** Запись одиночного слова по форме из текста (или null). */
-  lookupWord(raw) {
-    for (const c of lemmaCandidates(raw)) {
-      const e = this.words.get(c);
-      if (e) return e;
+  /**
+   * Начальная форма, к которой ведёт запись, или null (запись остаётся как есть). Нужна, потому что словарь собран из Викисловаря
+   * и у формы часто есть собственная запись с чужим смыслом: said — «упомянутый», saw — «пила», found — «основывать», are — «ар».
+   * Ведём к начальной форме в двух случаях:
+   *   1. форма есть в таблице неправильных форм (is → be, said → say), если её нет в OWN_ENTRY;
+   *   2. у записи нет русского перевода и пометка Викисловаря «форма слова» подтверждается правилами окончаний (abandoned → abandon).
+   * Пометке «форма слова» без такой проверки верить нельзя: в ней his → hi, beach → bitch, run → rin.
+   */
+  lemmaOf(e) {
+    if (e.t !== "w") return null;
+    let r = this.lemmas.get(e);
+    if (r === undefined) {
+      r = this.findLemma(e);
+      this.lemmas.set(e, r);
+    }
+    return r;
+  }
+
+  findLemma(e) {
+    if (OWN_ENTRY.has(e.w)) return null;
+    const names = [...(IRREGULAR.get(e.w) || [])];
+    const verified = (e.of || []).filter((l) => lemmaCandidates(e.w).includes(l));
+    if (!e.ru) {
+      names.push(...verified);
+      // «Standard spelling of color» (colour, centre, programme): в словаре перевода у такого написания нет, он у основного
+      const variant = /\bspelling of ([a-z][a-z-]*)\b/i.exec(e.en || "");
+      if (variant) names.push(variant[1].toLowerCase());
+    } else if (isPlural(e.w)) {
+      // У слова с переводом: множественное число, у которого в Викисловаре записан особый смысл (heads — «орёл», minutes — «протокол», words — «ссора»).
+      // В тексте это почти всегда обычное множественное число, поэтому ведём к единственному, если часть речи подходит.
+      for (const l of verified) if (posFits(e.pos, this.words.get(l)?.pos)) names.push(l);
+    }
+    for (const name of names) {
+      const L = this.words.get(name);
+      if (L && L !== e && L.w === name && L.t === "w" && L.ru && isOpenPos(L.pos)) return L;
     }
     return null;
+  }
+
+  /**
+   * Начальные формы из пометки «форма слова», которые подтверждают правила окончаний или таблица неправильных форм
+   * (для подсказки «Может быть и формой слова»). his → hi, run → rin, its → it подсказкой не бывают: правила окончаний их «подтверждают»,
+   * но междометие hi или местоимение it не начальная форма для his и its.
+   */
+  formOf(e) {
+    if (!isOpenPos(e.pos)) return [];
+    const cands = lemmaCandidates(e.w);
+    const irr = IRREGULAR.get(e.w) || [];
+    return (e.of || []).filter((l) => (cands.includes(l) || irr.includes(l)) && isOpenPos(this.words.get(l)?.pos));
+  }
+
+  /** Запись одиночного слова по форме из текста (или null). */
+  lookupWord(raw) {
+    const forms = surfaceForms(raw);
+    let spare = null; // сокращение без перевода (that’s, isn’t): берём, только если слова без сокращения в словаре нет
+    const cands = lemmaCandidates(raw);
+    const neg = NEGATIVE[norm(raw)];
+    if (neg && !cands.includes(neg)) cands.splice(1, 0, neg); // can’t → can, won’t → will
+    for (const c of cands) {
+      const e = this.words.get(c);
+      if (!e) continue;
+      // К начальной форме ведём только то, что написано в тексте: «founded» не должно превращаться в find через found
+      if (!forms.includes(c)) return e;
+      // Запись с апострофом не годится, если у неё нет перевода или слово попало к ней лишь как «другая форма» (it’s записано у its)
+      if (c.includes("'") && (!e.ru || e.w !== c)) {
+        spare ??= e;
+        continue;
+      }
+      return this.lemmaOf(e) || e;
+    }
+    return spare;
   }
 }
 

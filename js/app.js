@@ -1,7 +1,7 @@
 // app.js — запуск, маршруты и нижняя панель вкладок.
 import { h, icon, closeSheet } from "./dom.js";
 import { init, app, subscribe, queue, APP_NAME, ensureAnalysis, ensureContexts, reparseBooks, prefetchDictionary, startDictionary } from "./store.js";
-import { installErrorLog } from "./diag.js";
+import { installErrorLog, errorLog } from "./diag.js";
 import { renderHome } from "./views/home.js";
 import { renderLibrary } from "./views/library.js";
 import { renderReader } from "./views/reader.js";
@@ -60,7 +60,28 @@ function restoreScroll(hash) {
   setTimeout(() => view.isConnected && view.scrollTop === 0 && (view.scrollTop = top), 250);
 }
 
+/** Показывает экран по адресу. Если экран упал (испорченная запись, непредвиденный случай), вместо пустого окна — понятное сообщение и дорога назад. */
 function route() {
+  try {
+    show();
+  } catch (err) {
+    cleanup = null;
+    errorLog.add("экран", err?.message || err, location.hash);
+    document.body.classList.remove("immersive");
+    current = location.hash.startsWith("#/home") || !location.hash ? "home" : current;
+    previous = location.hash || "#/home";
+    stage.replaceChildren(
+      h(
+        "main",
+        { class: "view" },
+        h("div", { class: "page" }, h("p", { class: "empty lead" }, "Не удалось открыть этот экран"), h("p", { class: "note" }, String(err?.message || err)), h("a", { class: "btn", href: "#/home" }, "На главную"), h("p", { class: "note" }, "Если так повторяется: Настройки → «Сведения для отладки» — их можно отправить разработчику.")),
+      ),
+    );
+    paintTabs();
+  }
+}
+
+function show() {
   const [, name = "home", arg] = location.hash.slice(1).split("/");
   if (previous && current !== "read") {
     const top = stage.querySelector(".view")?.scrollTop;

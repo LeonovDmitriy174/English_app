@@ -125,7 +125,8 @@ export function resolveWords(glossary, words, limit = SIZE) {
   const out = [];
   const seen = new Set();
   for (const w of words || []) {
-    const e = glossary.byId.get(`w:${w}`) || glossary.lookupWord(w);
+    // Слово из списка ищем так же, как слово из книги: said в списке и say в книге это одна карточка
+    const e = glossary.lookupWord(w) || glossary.byId.get(`w:${w}`);
     if (!e || seen.has(e.id) || !usable(e)) continue;
     seen.add(e.id);
     out.push(e);
@@ -142,8 +143,9 @@ export const isPlainWord = (w) => /^[a-z]+$/.test(w || "");
 
 /** Слова словаря по убыванию частоты из словаря (запись z, шкала Zipf с шагом 0,1): запасной порядок, пока нет списка. */
 export function rankFromDictionary(glossary, limit = SIZE) {
+  // В список идут только слова, которые приложение само находит по этому написанию: said, was, eyes ведут к say, be, eye и отдельно не нужны
   return glossary.list
-    .filter((e) => Number.isFinite(e.z) && usable(e) && isPlainWord(e.w))
+    .filter((e) => Number.isFinite(e.z) && usable(e) && isPlainWord(e.w) && glossary.lookupWord(e.w) === e)
     .sort((a, b) => b.z - a.z || hash(a.w) - hash(b.w))
     .slice(0, limit);
 }

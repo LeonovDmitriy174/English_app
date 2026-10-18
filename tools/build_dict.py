@@ -28,7 +28,6 @@ import argparse
 import gzip
 import json
 import re
-import shutil
 import sys
 import time
 import unicodedata

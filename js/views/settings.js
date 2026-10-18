@@ -88,9 +88,10 @@ export function openAppSettings() {
     loadBtn.disabled = true;
     loadBtn.textContent = "Загружаю…";
     try {
-      const { cards, notes, log } = await importData(await f.text());
+      const { cards, notes, log, skipped } = await importData(await f.text());
       const parts = [cards && `карточек: ${cards}`, notes && `заметок: ${notes}`, log && `ответов: ${log}`].filter(Boolean);
-      toast(parts.length ? `Загружено ${parts.join(", ")}` : "Новых данных в копии нет");
+      const bad = skipped ? `. Повреждённых записей пропущено: ${skipped}` : "";
+      toast((parts.length ? `Загружено ${parts.join(", ")}` : "Новых данных в копии нет") + bad);
     } catch (err) {
       toast(err.message || "Не удалось прочитать файл");
     } finally {

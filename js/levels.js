@@ -73,7 +73,9 @@ export const isLeech = (srs) => !!srs && srs.lapses >= LEECH_LAPSES && !isMaster
 
 /** Учебный день по местному времени, «ГГГГ-ММ-ДД»: сутки начинаются в 4:00, поэтому ночное повторение входит в предыдущий день. */
 export function studyDay(ts = Date.now(), rollover = ROLLOVER) {
-  const d = new Date(ts - rollover * HOUR);
+  // По часам на стене, а не вычитанием четырёх часов: в ночь перевода часов четыре часа назад это уже не 0:00 того же дня
+  const d = new Date(ts);
+  if (d.getHours() < rollover) d.setDate(d.getDate() - 1);
   const p = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
@@ -154,6 +156,23 @@ export function migrateSrs(srs, now = Date.now()) {
   const farthest = now + 28 * DAY;
   const due = Number.isFinite(srs.due) ? Math.min(srs.due, farthest) : now;
   return { ...srs, lv, due, v: LADDER };
+}
+
+/**
+ * Карточка с допустимыми значениями: уровень целый от 0 до MAX_LEVEL, срок и время ответа числа, счётчики целые и не меньше нуля.
+ * Нужна на случай повреждённой копии или записи: срок NaN означал бы карточку, которая никогда не наступит. Целую карточку возвращает как есть.
+ */
+export function sanitizeSrs(srs, now = Date.now()) {
+  if (!srs || typeof srs !== "object") return newSrs(now);
+  const count = (n) => (Number.isInteger(n) && n >= 0 ? n : Math.max(0, Math.round(Number(n)) || 0));
+  const lv = Math.min(count(srs.lv), MAX_LEVEL);
+  const due = Number.isFinite(srs.due) ? srs.due : now;
+  const last = Number.isFinite(srs.last) ? srs.last : null;
+  const reps = count(srs.reps);
+  const lapses = count(srs.lapses);
+  const v = srs.v >= LADDER ? srs.v : LADDER;
+  const same = lv === srs.lv && due === srs.due && last === srs.last && reps === srs.reps && lapses === srs.lapses && v === srs.v;
+  return same ? srs : { ...srs, lv, due, last, reps, lapses, v };
 }
 
 /** Перевод карточек самого старого формата (FSRS, версии 1–2) сразу в нынешние уровни. */

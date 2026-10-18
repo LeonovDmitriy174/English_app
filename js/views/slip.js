@@ -1,6 +1,6 @@
 // slip.js — карточка слова («листок картотеки»): перевод, определение, цитата из книги, пример.
 import { h, icon, openSheet, toast } from "../dom.js";
-import { cardFor, saveCard, removeCard, setTranslation, setMnemonic, setSkip, setChar, posLabel, kindClass } from "../store.js";
+import { app, cardFor, saveCard, removeCard, setTranslation, setMnemonic, setSkip, setChar, posLabel, kindClass } from "../store.js";
 import { MAX_TEXT } from "../characters.js";
 import { speak, canSpeak } from "../tts.js";
 
@@ -308,6 +308,7 @@ export function openSlip(opts) {
 
     const shown = (surface || "").toLowerCase();
     const differs = shown && shown !== entry.w;
+    const via = entry.of?.length ? app.glossary.formOf(entry) : []; // только подтверждённые правилами: his «hi» и run «rin» подсказкой не бывают
     // свой перевод, если вы его правили, иначе словарный
     const tr = saved?.edited ? { ru: saved.ru, rm: "" } : entry;
     const root = h(
@@ -337,7 +338,7 @@ export function openSlip(opts) {
           ],
       entry.en && h("p", { class: "def" }, entry.en),
       !tr.ru && !tr.rm && h("p", { class: "note" }, "Перевода на русский пока нет, только определение."),
-      entry.of?.length > 0 && h("p", { class: "meta via" }, `Может быть и формой слова: ${entry.of.join(", ")}`),
+      via.length > 0 && h("p", { class: "meta via" }, `Может быть и формой слова: ${via.join(", ")}`),
       quote(ctx || saved?.ctx?.[0]),
       entry.ex && h("p", { class: "exl" }, h("small", null, "Пример"), entry.ex),
       saved && editing === "mnemonic"
