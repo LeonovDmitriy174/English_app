@@ -51,9 +51,9 @@ export function renderDict(root) {
   const actions = h("div", { class: "dv-actions", hidden: true });
 
   // Частотные слова по порядку: проверка знаний, из которой слова попадают в словарь (js/views/replenish.js)
-  const replenish = h("button", { class: "rp-entry", onClick: () => (location.hash = "#/replenish") }, icon("list", 22), h("span", { class: "rp-entry-t" }, h("b", null, "Пополнить словарь"), h("small", null, "Проверка частотных слов: верные добавятся как знакомые")), icon("next", 18));
+  const replenish = h("button", { class: "rp-entry", onClick: () => (location.hash = "#/replenish") }, icon("list", 22), h("span", { class: "rp-entry-t" }, h("b", null, "Топ слов по частотности"), h("small", null, "Проверка частотных слов: верные добавятся как знакомые")), icon("next", 18));
 
-  // Разговорные фразы: то же, что «Пополнить словарь», но колода из готовых фраз для живой речи (js/views/phrases.js)
+  // Разговорные фразы: то же, что «Топ слов по частотности», но колода из готовых фраз для живой речи (js/views/phrases.js)
   const phrasesEntry = h("button", { class: "rp-entry", onClick: () => (location.hash = "#/phrases") }, icon("speaker", 22), h("span", { class: "rp-entry-t" }, h("b", null, "Разговорные фразы"), h("small", null, "Выражения для живой речи: how's it going, fair enough, I'm into")), icon("next", 18));
 
   const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Словарь"), sub), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "Добавить слово", onClick: () => openAddWord() }, icon("plus", 24)), h("button", { class: "iconbtn", "aria-label": "Настройки словаря", onClick: () => openDictSettings() }, icon("sliders", 22)))), replenish, phrasesEntry, controls, list);

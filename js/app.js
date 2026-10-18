@@ -103,7 +103,7 @@ function show() {
     current = "dict";
     cleanup = renderDict(stage);
   } else if (name === "replenish") {
-    current = "dict"; // «Пополнить словарь» открывается из словаря, и вкладка «Словарь» остаётся отмеченной
+    current = "dict"; // «Топ слов по частотности» открывается из словаря, и вкладка «Словарь» остаётся отмеченной
     cleanup = renderReplenish(stage);
   } else if (name === "phrases") {
     current = "dict"; // разговорные фразы открываются из словаря

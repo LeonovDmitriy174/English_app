@@ -1,7 +1,7 @@
 // store.js — точка входа для экранов: запуск приложения и всё, что они берут из хранилища.
 // Устройство хранилища (js/store/): state — общее состояние, lexicon — словарь, settings, cards — слова и очередь повторения,
 // contexts — предложения из книг для заданий, books — книги и разбор, folders и catalog — папки и встроенные книги,
-// notes — заметки, replenish — «Пополнить словарь», data — копии данных и сведения для отладки.
+// notes — заметки, replenish — «Топ слов по частотности», data — копии данных и сведения для отладки.
 import { db } from "./db.js";
 import * as levels from "./levels.js";
 import { normalizeMix } from "./modes.js";

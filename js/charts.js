@@ -12,7 +12,7 @@ import { FREQ_TASK } from "./freqdeck.js";
 export const LEARNED = KNOWN; // с какого уровня слово «выучено»: «Знаю» и выше (groupOf в progress.js)
 export const HEAT_WEEKS = 17; // сколько недель в календаре занятий
 export const HEAT_SEC_PER_REVIEW = 30; // для насыщенности цвета полминуты чтения равны одному повторению
-export const HEAT_CHECK = 0.2; // а проверка слова в «Пополнить словарь» (несколько секунд) равна пятой части повторения
+export const HEAT_CHECK = 0.2; // а проверка слова в «Топ слов по частотности» (несколько секунд) равна пятой части повторения
 export const PACE_DAYS = 14; // за сколько последних дней считается темп чтения
 export const PACE_MIN_DAYS = 3; // меньше дней данных — темп не показываем
 export const PACE_MIN_WORDS = 600; // меньше слов — тоже
@@ -54,7 +54,7 @@ export const linePath = (pts) => pts.map((p, i) => `${i ? "L" : "M"}${p.x.toFixe
 // ── Календарь занятий ───────────────────────────────────────────────────────
 /**
  * Календарь занятий за weeks недель: колонки — недели с понедельника, строки — дни недели; последняя колонка кончается сегодняшним днём.
- * Возвращает { cells, weeks, months, activeDays }. Клетка: { day, col, row, n (повторений), check (проверок слов в «Пополнить словарь»), sec (чтения), active, level 0…4 }.
+ * Возвращает { cells, weeks, months, activeDays }. Клетка: { day, col, row, n (повторений), check (проверок слов в «Топ слов по частотности»), sec (чтения), active, level 0…4 }.
  * День «занятый», как и для серии: хотя бы одно повторение или минута чтения. Насыщенность 1…4 — по месту дня среди занятых дней
  * календаря (четверти), поэтому цвет читается при любом темпе: у новичка и у того, кто повторяет сотни слов в день.
  */
@@ -62,7 +62,7 @@ export function activityGrid(log, activity, now = Date.now(), weeks = HEAT_WEEKS
   const row = weekdayOf(studyDay(now));
   const days = lastDays(now, (weeks - 1) * 7 + row + 1);
   const reviews = new Map(days.map((d) => [d, 0]));
-  const checks = new Map(days.map((d) => [d, 0])); // проверки слов в «Пополнить словарь»: занятие, но не повторение
+  const checks = new Map(days.map((d) => [d, 0])); // проверки слов в «Топ слов по частотности»: занятие, но не повторение
   for (const e of log || []) {
     const d = studyDay(e.t);
     const into = e.task === FREQ_TASK ? checks : reviews;

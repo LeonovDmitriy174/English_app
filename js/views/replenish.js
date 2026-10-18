@@ -1,10 +1,11 @@
-// replenish.js — «Пополнить словарь»: стартовый экран (где остановились, тысячи и тесты), проверка слов по частоте и итоги.
+// replenish.js — «Топ слов по частотности»: стартовый экран (где остановились, тысячи и тесты), проверка слов по частоте и итоги.
 // Правила (что добавляется, что оставляется, как сдаётся тест) в js/freqdeck.js, запись в словарь в js/store/replenish.js.
 import { h, icon, toast, openSheet } from "../dom.js";
 import { app, dictionaryReady, loadFreqState, saveFreqState, loadFreqFile, loadOwnList, saveOwnList, clearOwnList, replenishAnswer, newSpreadPlan, newSeriesId, undoSeries, posLabel } from "../store.js";
 import { buildChoices, optionText } from "../choices.js";
 import { speak, canSpeak } from "../tts.js";
 import { levelBar } from "./level.js";
+import { researchCard } from "./research.js";
 import { MIN_LIST, EXAM_SIZE, PASS_SHARE, buildRanking, overview, placeInList, markChecked, pickExam, recordExam, examVerdict, blockOf, blockRange, parseOwnList } from "../freqdeck.js";
 
 const plural = (n, f) => {
@@ -33,7 +34,7 @@ export function renderReplenish(root) {
   const total = () => ranking.items.length;
 
   async function load() {
-    view.replaceChildren(h("div", { class: "page" }, h("header", { class: "top" }, h("h1", { class: "title" }, "Пополнить словарь")), h("p", { class: "note" }, "Загружаю словарь…")));
+    view.replaceChildren(h("div", { class: "page" }, h("header", { class: "top" }, h("h1", { class: "title" }, "Топ слов по частотности")), h("p", { class: "note" }, "Загружаю словарь…")));
     [state, own, file] = await Promise.all([loadFreqState(), loadOwnList(), loadFreqFile()]);
     await dictionaryReady();
     if (!alive) return;
@@ -58,7 +59,7 @@ export function renderReplenish(root) {
     run = null;
     view.className = "view";
     document.body.classList.remove("immersive");
-    const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Пополнить словарь")), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "К словарю", onClick: () => (location.hash = "#/dict") }, icon("close", 24)))));
+    const page = h("div", { class: "page" }, h("header", { class: "top" }, h("div", null, h("h1", { class: "title" }, "Топ слов по частотности")), h("div", { class: "top-actions" }, h("button", { class: "iconbtn", "aria-label": "К словарю", onClick: () => (location.hash = "#/dict") }, icon("close", 24)))));
     view.replaceChildren(page);
 
     if (app.dict.state === "error") return page.append(h("p", { class: "note err" }, "Словарь не загрузился, проверять нечего. Откройте любой другой раздел и вернитесь, когда словарь загрузится."));
@@ -74,7 +75,10 @@ export function renderReplenish(root) {
         "div",
         { class: "start-row", style: { marginTop: "20px" } },
         h("button", { class: "btn primary grow", onClick: () => startSeries(o.finished ? 1 : o.next) }, o.finished ? "Пройти заново" : o.done ? `Продолжить с ${o.next}-го слова` : "Начать"),
+        // список мог перестроиться: тогда первые слова нового списка ни разу не показывались, а отметка «проверено» стоит позже
+        o.next > 1 && !o.finished && h("button", { class: "btn quiet", onClick: () => startSeries(1) }, "С первого слова"),
       ),
+      researchCard(),
       h("div", { class: "rp-blocks" }, o.blocks.map(blockRow)),
       h("p", { class: "note tight" }, sourceNote(), " ", h("button", { class: "linkbtn inline", onClick: openOwnList }, own ? "Свой список" : "Загрузить свой список")),
     ];
@@ -86,15 +90,15 @@ export function renderReplenish(root) {
       "section",
       { class: "empty" },
       h("p", { class: "lead" }, "Пока нет слов для проверки"),
-      h("p", null, "Частотный список строится по словарю приложения, а в нём слишком мало слов с переводом. Соберите полный словарь (README, раздел «Словарь»), и здесь появятся пять тысяч самых частых слов."),
+      h("p", null, "Частотный список строится по словарю приложения, а в нём слишком мало слов с переводом. Соберите полный словарь (README, раздел «Словарь»), и здесь появятся десять тысяч самых частых слов."),
       h("button", { class: "btn", onClick: openOwnList }, "Загрузить свой список"),
     );
   }
 
   function sourceNote() {
     if (ranking.source === "own") return `Список: ваш${own?.name ? ` («${own.name}»)` : ""}.`;
-    if (ranking.source === "file") return "Список составлен по частоте слов в английских текстах.";
-    return "Порядок приблизительный (по частоте слов в словаре). Точный список: npm run freq.";
+    if (ranking.source === "file") return file.src === "nation-bnc-coca" ? "Список: семьи слов Пола Нейшна (BNC/COCA), от самых частых к более редким." : "Список составлен по частоте слов в английских текстах.";
+    return "Порядок приблизительный (по частоте слов в словаре). Точный список подключается файлом data/freq.json (README).";
   }
 
   function blockRow(b) {

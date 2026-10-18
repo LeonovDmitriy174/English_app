@@ -38,6 +38,7 @@ export const FIXES = {
   even: { ru: "даже (even he — даже он); ещё (even more — ещё больше); ровный, гладкий; чётный" },
   no: { ru: "нет; не, никакой (no money — нет денег)" },
   grey: { ru: "серый, седой; пасмурный", en: "Of a color between black and white (British spelling of gray)" },
+  according: { ru: "согласно, в соответствии с (according to …: по словам, по данным)", en: "As stated by; in agreement with (according to)" },
 };
 
 const ENTITY = { "&lt;": "<", "&gt;": ">", "&amp;": "&", "&quot;": '"', "&apos;": "'", "&#39;": "'", "&nbsp;": " " };

@@ -49,7 +49,7 @@ export function reviewsByDay(log, now = Date.now(), n = 14) {
   const rows = lastDays(now, n).map((day) => ({ day, n: 0, ok: 0 }));
   const at = new Map(rows.map((r) => [r.day, r]));
   for (const e of log || []) {
-    if (e.task === FREQ_TASK) continue; // проверка в «Пополнить словарь» не повторение: серию дней она продлевает, а в счёт повторений и точности не идёт
+    if (e.task === FREQ_TASK) continue; // проверка в «Топ слов по частотности» не повторение: серию дней она продлевает, а в счёт повторений и точности не идёт
     const r = at.get(studyDay(e.t));
     if (!r) continue;
     r.n += 1;

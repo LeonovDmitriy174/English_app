@@ -167,7 +167,7 @@ export async function importData(text) {
     const merged = mergeChars(app.chars, normalizeChars(data.chars)); // заметки к именам: чего на устройстве нет — добавляется, своя заметка сильнее файловой
     if (merged.changed) await replaceChars(merged.map);
   }
-  if (data.freq) await importReplenish(data.freq); // «Пополнить словарь»: где остановились, сданные тесты, свой список слов
+  if (data.freq) await importReplenish(data.freq); // «Топ слов по частотности»: где остановились, сданные тесты, свой список слов
   if (Array.isArray(data.known)) {
     const before = app.known.size;
     for (const id of data.known) if (typeof id === "string") app.known.add(id);

@@ -136,7 +136,7 @@ test("eyes находит eye, а не диалектное ey", () => {
   assert.equal(g.lookupWord("picked")?.w, "pick");
 });
 
-test("список «Пополнить словарь» не содержит форм, которые приложение ведёт к другим словам", () => {
+test("список «Топ слов по частотности» не содержит форм, которые приложение ведёт к другим словам", () => {
   const words = rankFromDictionary(g, 100).map((e) => e.w);
   for (const form of ["said", "saw", "found", "was", "is", "heads", "abandoned"]) assert.ok(!words.includes(form), `${form} не нужен в списке`);
   for (const e of rankFromDictionary(g, 100)) assert.equal(g.lookupWord(e.w), e, `${e.w} находится по своему написанию`);
@@ -154,6 +154,16 @@ test("исправления словаря: сущности HTML заменя�
   const the = new Glossary([{ t: "w", w: "the", pos: "article", rm: "...поскольку она уже упомянута", en: "...because", z: 7.7 }]).lookupWord("the");
   assert.match(the.ru, /артикль/);
   assert.equal(new Glossary([{ t: "pv", w: "the", ru: "x" }]).list[0].ru, "x", "исправления только у слов (w), не у фраз");
+});
+
+test("according остаётся при своей записи (с переводом), а не ведёт к accord", () => {
+  const raw = [
+    { t: "w", w: "accord", pos: "noun, verb", ru: "согласие; аккорд", en: "agreement", z: 3.8 },
+    { t: "w", w: "according", pos: "adjective", rm: "согласие или гармония", en: "form of accord", of: ["accord"], z: 5.3 },
+  ];
+  const e = new Glossary(raw).lookupWord("according");
+  assert.equal(e.w, "according");
+  assert.match(e.ru, /согласно/);
 });
 
 test("исправления лежат только у слов с переводом и заменяют только известные поля", () => {

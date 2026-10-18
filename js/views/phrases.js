@@ -1,6 +1,6 @@
-// phrases.js — «Разговорные фразы»: проверка фраз для живой речи в формате «Пополнить словарь»: фраза, четыре перевода,
+// phrases.js — «Разговорные фразы»: проверка фраз для живой речи в формате «Топ слов по частотности»: фраза, четыре перевода,
 // верный ответ добавляет фразу в словарь знакомой, неверный новой. Правила — js/freqdeck.js (decide) и js/store/replenish.js,
-// колода и состояние — js/phrasedeck.js, сами фразы — js/phrasedata.js. Оформление то же, что у «Пополнить словарь».
+// колода и состояние — js/phrasedeck.js, сами фразы — js/phrasedata.js. Оформление то же, что у «Топ слов по частотности».
 import { h, icon, toast } from "../dom.js";
 import { app, loadPhraseState, savePhraseState, replenishAnswer, newSpreadPlan, newSeriesId, undoSeries, posLabel } from "../store.js";
 import { buildChoices, optionText } from "../choices.js";

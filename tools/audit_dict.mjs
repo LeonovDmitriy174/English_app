@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Проверка настоящего словаря (data/dict.json). Ловит ошибки данных, которые тесты на маленьком образце не видят:
-// формы слов, которые ведут к чужому смыслу, список «Пополнить словарь» с формами вместо слов, обломки разметки в переводах.
+// формы слов, которые ведут к чужому смыслу, список «Топ слов по частотности» с формами вместо слов, обломки разметки в переводах.
 //
 // Запуск:  node tools/audit_dict.mjs [путь/к/dict.json]      (или  npm run audit:dict)
 // Если рядом со словарём лежит собранный частотный список (data/freq.json, tools/build_freq.py), проверяется и он.
@@ -85,6 +85,7 @@ export function audit(raw, freq = null) {
     "that's": "that", "it's": "it", "can't": "can", "isn't": "be", "didn't": "do", "let's": "let",
     words: "word", times: "time", heads: "head", minutes: "minute", colour: "color", centre: "center",
     left: "left", ground: "ground", people: "people", better: "better",
+    according: "according", following: "following", including: "including", during: "during",
   };
   const wrong = [];
   for (const [form, want] of Object.entries(expect)) {
@@ -102,22 +103,22 @@ export function audit(raw, freq = null) {
   const looksLikeThin = words.filter((e) => !e.ru && (e.of || []).some((l) => lemmaCandidates(e.w).includes(l)) && g.lookupWord(e.w) === e);
   if (looksLikeThin.length) warn(`${looksLikeThin.length} форм без перевода остаются при своей записи (у начальной формы нет перевода или она в списке исключений): ${list(looksLikeThin.map((e) => e.w))}`);
 
-  // ── 4. Список «Пополнить словарь» (запасной порядок по частоте из словаря) ─────
+  // ── 4. Список «Топ слов по частотности» (запасной порядок по частоте из словаря) ─────
   const top = rankFromDictionary(g, SIZE);
-  if (words.length >= 10000 && top.length < SIZE) err(`в списке «Пополнить словарь» только ${top.length} слов из ${SIZE}`);
+  if (words.length >= 10000 && top.length < SIZE) err(`в списке «Топ слов по частотности» только ${top.length} слов из ${SIZE}`);
   const topProblems = {
     "не простое слово": top.filter((e) => !isPlainWord(e.w)),
     "без перевода": top.filter((e) => !e.ru && !e.rm),
     "поиск ведёт к другой записи": top.filter((e) => g.lookupWord(e.w) !== e),
   };
-  for (const [what, xs] of Object.entries(topProblems)) if (xs.length) err(`в списке «Пополнить словарь» ${xs.length} слов, ${what}: ${list(xs.map((e) => e.w))}`);
+  for (const [what, xs] of Object.entries(topProblems)) if (xs.length) err(`в списке «Топ слов по частотности» ${xs.length} слов, ${what}: ${list(xs.map((e) => e.w))}`);
   const ids = new Set(top.map((e) => e.id));
-  if (ids.size !== top.length) err("в списке «Пополнить словарь» есть повторы");
+  if (ids.size !== top.length) err("в списке «Топ слов по частотности» есть повторы");
   const noRuTop = top.filter((e) => !e.ru);
-  if (noRuTop.length > top.length * 0.1) warn(`в списке «Пополнить словарь» у ${noRuTop.length} слов только автоперевод (${Math.round((noRuTop.length / top.length) * 100)}%)`);
+  if (noRuTop.length > top.length * 0.1) warn(`в списке «Топ слов по частотности» у ${noRuTop.length} слов только автоперевод (${Math.round((noRuTop.length / top.length) * 100)}%)`);
 
   // ── 4б. Частотный список data/freq.json (если собран tools/build_freq.py) ─────
-  let freqLine = "Файл data/freq.json пуст (заглушка): порядок слов в «Пополнить словарь» берётся из словаря. Чтобы он опирался на частоты в текстах: pip install wordfreq, затем python3 tools/build_freq.py.";
+  let freqLine = "Файл data/freq.json пуст (заглушка): порядок слов в «Топ слов по частотности» берётся из словаря. Чтобы он опирался на частоты в текстах: pip install wordfreq, затем python3 tools/build_freq.py.";
   if (freq != null && !Array.isArray(freq?.words)) {
     err("data/freq.json неправильного вида: нет списка words");
     freqLine = "";
@@ -130,9 +131,9 @@ export function audit(raw, freq = null) {
     // Так же, как в приложении: слово списка ищется как слово из книги (said и say это одна карточка), повторы и неподходящие пропускаются
     const fileTop = buildRanking({ glossary: g, file: { words: strs }, limit: SIZE }).items;
     if (words.length >= 10000 && fileTop.length < SIZE) {
-      // Часть слов файла выпадает (формы сходятся с основными словами: said и say одна карточка), нужен запас
-      const need = Math.ceil(((strs.length / Math.max(1, fileTop.length)) * SIZE * 1.1) / 100) * 100;
-      err(`из data/freq.json получилось только ${fileTop.length} слов из ${SIZE} (из ${strs.length} слов файла часть сходится в одну карточку или без перевода): пересоберите список с запасом, python tools/build_freq.py --size ${need}`);
+      // Часть слов файла выпадает (служебные слова, слова без перевода, формы одной карточки), нужен запас: по списку Нейшна на каждые 1000 семей
+      const lists = Math.ceil(((strs.length / Math.max(1, fileTop.length)) * SIZE * 1.1) / 1000);
+      err(`из data/freq.json получилось только ${fileTop.length} слов из ${SIZE} (из ${strs.length} слов файла часть без перевода или сходится в одну карточку): пересоберите список с запасом, python tools/build_freq.py файл.xlsx --lists ${lists}`);
     }
     const notPlain = fileTop.filter((e) => !isPlainWord(e.w));
     if (notPlain.length) err(`в списке из data/freq.json ${notPlain.length} слов, не простое слово: ${list(notPlain.map((e) => e.w))}`);
@@ -146,13 +147,8 @@ export function audit(raw, freq = null) {
     const lostTop = strs.slice(0, 1000).filter(unresolved);
     if (lostTop.length) warn(`${lostTop.length} слов из первой тысячи data/freq.json не подходят для списка (нет в словаре, нет перевода или служебное слово), они пропускаются: ${list(lostTop)}`);
     const lost = strs.filter(unresolved).length;
-    if (lost > strs.length * 0.1) warn(`${lost} из ${strs.length} слов data/freq.json не подходят для списка (нет в словаре, нет перевода, служебные слова) (${Math.round((lost / strs.length) * 100)}%): словарь и список собраны из разных данных?`);
-    // Порядок wordfreq и оценка частоты в словаре должны в целом сходиться: если нет, список собран не из тех данных
-    const dictFirst = new Set(top.slice(0, 1000).map((e) => e.id));
-    const same = fileTop.slice(0, 1000).filter((e) => dictFirst.has(e.id)).length;
-    const share = fileTop.length >= 1000 ? Math.round((same / 1000) * 100) : null;
-    if (share !== null && share < 55) warn(`первая тысяча data/freq.json совпадает с первой тысячей по частоте из словаря только на ${share}%: проверьте, что список собран из этого словаря`);
-    freqLine = `Список из data/freq.json (${freq.src || "источник не указан"}, ${freq.built || "дата не указана"}): в файле ${strs.length} слов, в «Пополнить словарь» войдёт ${fileTop.length}; первая тысяча совпадает с порядком по словарю на ${share ?? "?"}%; не подошло для списка: ${lost}.`;
+    if (lost > strs.length * 0.25) warn(`${lost} из ${strs.length} слов data/freq.json не подходят для списка (нет в словаре, нет перевода, служебные слова) (${Math.round((lost / strs.length) * 100)}%): словарь и список собраны из разных данных?`);
+    freqLine = `Список из data/freq.json (${freq.src || "источник не указан"}, ${freq.built || "дата не указана"}): в файле ${strs.length} слов, в «Топ слов по частотности» войдёт ${fileTop.length}; не подошло для списка: ${lost}.`;
   }
 
   // ── 5. Семьи слов и разговорные фразы ───────────────────────────────────────
@@ -167,7 +163,7 @@ export function audit(raw, freq = null) {
   const summary = [
     `Словарь: ${g.list.length} записей, ${words.length} слов (разбор в приложении ${ms} мс).`,
     ...(freqLine ? [freqLine] : []),
-    `Список «Пополнить словарь»: ${top.length} слов; семей слов: ${fam.list.length} (мало представлены в словаре: ${thinFam.length}); разговорных фраз: ${phrases.length} (уже есть в словаре: ${inDict.length}).`,
+    `Список «Топ слов по частотности»: ${top.length} слов; семей слов: ${fam.list.length} (мало представлены в словаре: ${thinFam.length}); разговорных фраз: ${phrases.length} (уже есть в словаре: ${inDict.length}).`,
   ];
   return { skipped: false, wordCount, errors, warnings, summary };
 }

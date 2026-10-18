@@ -38,8 +38,9 @@ import {
 const seeded = (seed = 1) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const w = (word, over = {}) => ({ t: "w", w: word, pos: "noun", ru: `перевод ${word}`, en: `a ${word}`, ...over });
 
-test("размер списка пять тысяч, тест после каждой тысячи, перекрытие два слова", () => {
-  assert.equal(SIZE, 5000);
+test("размер списка десять тысяч, тест после каждой тысячи, перекрытие два слова", () => {
+  assert.equal(SIZE, 10000);
+  assert.equal(blockCount(SIZE), 10);
   assert.equal(BLOCK, 1000);
   assert.equal(OVERLAP, 2);
   assert.equal(EXAM_SIZE, 200);
