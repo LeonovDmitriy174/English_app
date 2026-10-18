@@ -100,6 +100,12 @@ class Ranking(unittest.TestCase):
             self.assertNotIn(bad, words)
         self.assertNotIn("ghost2", words, "у слова без частоты в списке места нет")
 
+    def test_compounds_and_contractions_are_not_listed(self):
+        entries = [w("time"), w("to-be"), w("is-a"), w("one-of"), w("don't", "verb"), w("people")]
+        f = lambda x: {"time": 5, "people": 4, "to-be": 9, "is-a": 8, "one-of": 7, "don't": 6}.get(x, 0.0)  # noqa: E731
+        out = bf.rank_lemmas(entries, f, set())
+        self.assertEqual([x for x, _ in out], ["time", "people"], "слова с дефисом и апострофом выше по частоте, но в список не входят")
+
     def test_size_and_ties(self):
         self.assertEqual(len(self.ranked(size=2)), 2)
         tied = [w("beta"), w("alpha")]

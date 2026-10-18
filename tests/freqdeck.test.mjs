@@ -16,6 +16,7 @@ import {
   parseOwnList,
   resolveWords,
   rankFromDictionary,
+  isPlainWord,
   buildRanking,
   blockCount,
   blockOf,
@@ -122,6 +123,20 @@ test("порядок по частоте из словаря: по убыван�
   const out = rankFromDictionary(glossary);
   assert.deepEqual(out.slice(0, 4).map((e) => e.w), ["time", "people", "good", "walk"]);
   assert.ok(!out.some((e) => ["the", "of", "have", "nameless", "kick the bucket"].includes(e.w)));
+});
+
+test("порядок по частоте из словаря: составные через дефис и сокращения в список не попадают", () => {
+  const g = new Glossary([
+    w("time", { z: 6.3 }),
+    w("to-be", { z: 6.9 }),
+    w("is-a", { z: 6.8 }),
+    w("one-of", { z: 6.7 }),
+    w("don't", { pos: "verb", z: 6.6 }),
+    w("good", { pos: "adjective", z: 6.1 }),
+  ]);
+  assert.deepEqual(rankFromDictionary(g).map((e) => e.w), ["time", "good"]);
+  assert.equal(isPlainWord("time"), true);
+  for (const x of ["to-be", "don't", "ice cream", "", null, "Time"]) assert.equal(isPlainWord(x), false, String(x));
 });
 
 test("одинаковая частота: порядок не по алфавиту, но один и тот же при каждом запуске", () => {
@@ -269,6 +284,8 @@ test("место в списке после его смены: идём за с�
   assert.equal(placeInList({ done: 4, last: "zzz" }, items), 4, "слова нет: прежний номер");
   assert.equal(placeInList({ done: 90, last: "zzz" }, items), 5, "не дальше конца списка");
   assert.equal(placeInList({ done: 0, last: "" }, items), 0);
+  assert.equal(placeInList({ done: 40, last: "to-be" }, items), 0, "остановились на составном слове (его в списке больше нет): список начинается сначала");
+  assert.equal(placeInList({ done: 40, last: "don't" }, items), 0);
   assert.equal(placeInList({ done: 5, last: "e" }, []), 0);
 });
 

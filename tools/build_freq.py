@@ -7,7 +7,8 @@
 
 Как считается частота. Берётся ваш словарь (data/dict.json) и библиотека wordfreq. Частота слова это сумма частот его форм:
 walk + walks + walked + walking (формы по правилам из build_dict.regular_forms и неправильные формы записи, поле f).
-Форма, которая сама есть отдельным словом словаря (worker, hardly), к исходному слову не прибавляется. Имён собственных,
+Форма, которая сама есть отдельным словом словаря (worker, hardly), к исходному слову не прибавляется. Слова с дефисом (is-a, to-be) и с апострофом (don't) в список не берутся: частота таких записей считается по входящим словам и выходит выше, чем у time или people.
+Имён собственных,
 сокращений и приставок в словаре нет (build_dict.py их не берёт), поэтому в списке их тоже нет. В список попадают только слова,
 у которых в словаре есть перевод: любое слово из него можно спросить.
 
@@ -36,6 +37,8 @@ JS = ROOT / "js" / "freqdeck.js"
 DEFAULT_SIZE = 5300  # пять тысяч и запас на слова, которых не окажется в словаре на телефоне
 OPEN_POS = {"noun", "verb", "adjective", "adverb", "n", "v", "adj", "adv"}
 WORD_RE = re.compile(r"^[a-z][a-z'-]+$")
+# слово для списка: одни буквы (ту же проверку делает isPlainWord в js/freqdeck.js)
+PLAIN_RE = re.compile(r"^[a-z]{2,}$")
 
 
 def function_words(path: Path = JS) -> set[str]:
@@ -74,7 +77,7 @@ def rank_lemmas(entries: list[dict], freq, stop: set[str], size: int = DEFAULT_S
     heads = {e["w"] for e in entries if e.get("t") == "w"}
     scored = []
     for e in entries:
-        if e.get("t") != "w" or e["w"] in stop or not WORD_RE.match(e["w"]):
+        if e.get("t") != "w" or e["w"] in stop or not PLAIN_RE.match(e["w"]):
             continue
         if not has_translation(e) or not is_content_pos(e.get("pos", "")):
             continue

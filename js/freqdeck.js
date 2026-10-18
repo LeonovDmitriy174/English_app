@@ -134,10 +134,16 @@ export function resolveWords(glossary, words, limit = SIZE) {
   return out;
 }
 
+/**
+ * Простое слово: одни латинские буквы. Составные через дефис (is-a, to-be, one-of) и сокращения (don't) в частотный список не берутся:
+ * частота у них считается по входящим словам, поэтому «to-be» оказывался выше «time», а проверять по нему нечего.
+ */
+export const isPlainWord = (w) => /^[a-z]+$/.test(w || "");
+
 /** Слова словаря по убыванию частоты из словаря (запись z, шкала Zipf с шагом 0,1): запасной порядок, пока нет списка. */
 export function rankFromDictionary(glossary, limit = SIZE) {
   return glossary.list
-    .filter((e) => Number.isFinite(e.z) && usable(e))
+    .filter((e) => Number.isFinite(e.z) && usable(e) && isPlainWord(e.w))
     .sort((a, b) => b.z - a.z || hash(a.w) - hash(b.w))
     .slice(0, limit);
 }
@@ -262,7 +268,10 @@ export function placeInList(state, items) {
   if (!state.done || !items.length) return 0;
   if (items[state.done - 1]?.w === state.last) return state.done;
   const at = state.last ? items.findIndex((e) => e.w === state.last) : -1;
-  return at >= 0 ? at + 1 : Math.min(state.done, items.length);
+  if (at >= 0) return at + 1;
+  // последнее слово было составным (to-be, don't): такие слова из списка убраны, старая часть списка была другой, поэтому начинаем сначала
+  if (state.last && !isPlainWord(state.last)) return 0;
+  return Math.min(state.done, items.length);
 }
 
 /** Сводка для экрана: где остановились, по тысячам сколько проверено и как с тестом. */
