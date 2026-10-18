@@ -47,3 +47,26 @@ test("HTML-сущности в переводах не ошибка: прило�
   const r = audit([...filler(), { t: "w", w: "askedx", pos: "verb", rm: "&lt; &lt; Арсед &gt; &gt;", en: "x", z: 4 }]);
   assert.deepEqual(r.errors, []);
 });
+
+test("частотный список data/freq.json: заглушка не ошибка, повторы, составные слова и мусор находятся", () => {
+  const dict = [...filler(), { t: "w", w: "is-a", pos: "noun", ru: "это", en: "x", z: 4 }];
+  const ws = filler().map((e) => e.w);
+  const stub = audit(dict, { v: 1, src: "none", built: "", size: 0, words: [] });
+  assert.deepEqual(stub.errors, []);
+  assert.match(stub.summary.join("\n"), /заглушка/);
+  assert.match(audit(dict).summary.join("\n"), /заглушка/, "без файла то же, что заглушка");
+
+  const good = audit(dict, { v: 1, src: "wordfreq", built: "2026-10-18", words: ws.slice(0, 500) });
+  assert.deepEqual(good.errors, []);
+  assert.match(good.summary.join("\n"), /wordfreq, 2026-10-18\): в файле 500 слов, в «Пополнить словарь» войдёт 500/);
+
+  const bad = audit(dict, { words: [...ws.slice(0, 50), ws[3], "is-a"] }).errors.join("\n");
+  assert.match(bad, /data\/freq\.json повторяются слова: 1/);
+  assert.match(bad, /не простое слово: is-a/);
+  assert.match(audit(dict, { words: "x" }).errors.join("\n"), /неправильного вида/);
+  assert.match(audit(dict, { words: [...ws.slice(0, 20), 5] }).errors.join("\n"), /не только строки/);
+
+  const lost = audit(dict, { words: ["nosuchwordx", "be", ...ws.slice(0, 30)] });
+  assert.deepEqual(lost.errors, []);
+  assert.match(lost.warnings.join("\n"), /не подходят для списка.*nosuchwordx, be/);
+});

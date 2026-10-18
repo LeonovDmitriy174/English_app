@@ -34,7 +34,9 @@ import build_dict  # noqa: E402
 DICT = ROOT / "data" / "dict.json"
 OUT = ROOT / "data" / "freq.json"
 JS = ROOT / "js" / "freqdeck.js"
-DEFAULT_SIZE = 5300  # пять тысяч и запас на слова, которых не окажется в словаре на телефоне
+# Пять тысяч и большой запас: приложение ищет слово списка так же, как слово из книги, поэтому формы (said, found, left) сходятся с
+# основными словами (say, find) и выпадают, а часть слов отсеивается без перевода. На настоящем словаре выпадает около 13% списка.
+DEFAULT_SIZE = 6500
 OPEN_POS = {"noun", "verb", "adjective", "adverb", "n", "v", "adj", "adv"}
 WORD_RE = re.compile(r"^[a-z][a-z'-]+$")
 # слово для списка: одни буквы (ту же проверку делает isPlainWord в js/freqdeck.js)
